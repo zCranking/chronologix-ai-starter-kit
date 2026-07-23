@@ -40,8 +40,9 @@ Attorneys upload case documents through the `web/` Next.js UI; files land in
 Supabase Storage. The `api/` FastAPI service OCRs and chunks each document
 (`ingest/`), extracts dates/entities (`extraction/`), and stores chunks with
 embeddings in Postgres/pgvector. `chronology/` queries chunks in date order
-and calls Claude to build the chronology — this is the only module allowed
-to call an LLM. `flags/` cross-checks chunks for inconsistencies. `web/`
+and calls Claude to build the chronology; `flags/` cross-checks chunks for
+inconsistencies and may also call Claude for that. These two are the only
+modules allowed to call an LLM (see `docs/architecture.md`). `web/`
 reads the finished chronology from the API for attorney review, edit, and
 sign-off; nothing in `web/` talks to the LLM or Supabase directly.
 
