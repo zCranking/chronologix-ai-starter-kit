@@ -30,3 +30,8 @@ def test_extract_dates_returns_empty_list_for_no_dates():
 
 def test_extract_dates_skips_invalid_calendar_dates():
     assert extract_dates("Error code 2024-13-45 in the log.") == []
+
+
+def test_extract_dates_orders_mixed_formats_by_position_in_text():
+    text = "Injury on January 1, 2024, treated 2024-01-15, released 03/01/2024."
+    assert extract_dates(text) == [date(2024, 1, 1), date(2024, 1, 15), date(2024, 3, 1)]

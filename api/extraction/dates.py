@@ -30,12 +30,13 @@ _PATTERNS = [
 
 
 def extract_dates(text: str) -> list[date]:
-    found: list[date] = []
+    found: list[tuple[int, date]] = []
     for pattern, to_ymd in _PATTERNS:
         for match in pattern.finditer(text):
             try:
                 year, month, day = to_ymd(match)
-                found.append(date(year, month, day))
+                found.append((match.start(), date(year, month, day)))
             except ValueError:
                 continue  # ponytail: skip malformed matches (e.g. day 32) rather than crash ingest
-    return found
+    found.sort(key=lambda item: item[0])
+    return [d for _, d in found]
