@@ -3,7 +3,9 @@ import uuid
 from fastapi import BackgroundTasks, FastAPI, File, HTTPException, UploadFile
 from pydantic import BaseModel
 
+from chronology.build import build_chronology
 from core.db import get_client
+from flags.detect import detect_flags
 from ingest.pipeline import process_document
 
 app = FastAPI(title="Chronologix API")
@@ -79,3 +81,13 @@ def get_document(case_id: str, document_id: str) -> dict:
     if not result.data:
         raise HTTPException(status_code=404, detail="document not found")
     return result.data
+
+
+@app.post("/cases/{case_id}/chronology")
+def generate_chronology(case_id: str) -> list[dict]:
+    return build_chronology(case_id)
+
+
+@app.post("/cases/{case_id}/flags")
+def generate_flags(case_id: str) -> list[dict]:
+    return detect_flags(case_id)

@@ -52,3 +52,23 @@ def test_get_document_returns_404_when_not_found(monkeypatch):
     response = client.get("/cases/case-1/documents/doc-1")
 
     assert response.status_code == 404
+
+
+def test_generate_chronology_returns_entries_from_build_chronology(monkeypatch):
+    fake_entries = [{"case_id": "case-1", "event_date": "2024-01-15", "summary": "x"}]
+    monkeypatch.setattr(main, "build_chronology", lambda case_id: fake_entries)
+
+    response = client.post("/cases/case-1/chronology")
+
+    assert response.status_code == 200
+    assert response.json() == fake_entries
+
+
+def test_generate_flags_returns_flags_from_detect_flags(monkeypatch):
+    fake_flags = [{"case_id": "case-1", "description": "conflicting dates"}]
+    monkeypatch.setattr(main, "detect_flags", lambda case_id: fake_flags)
+
+    response = client.post("/cases/case-1/flags")
+
+    assert response.status_code == 200
+    assert response.json() == fake_flags
