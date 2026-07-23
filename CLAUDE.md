@@ -71,6 +71,14 @@ sign-off; nothing in `web/` talks to the LLM or Supabase directly.
   server that will touch case documents.
 
 ## Working agreements
+- Work autonomously through planned phases/sub-projects without pausing for
+  approval between them: design briefly, plan, delegate implementation to
+  `builder`, verify with `code-reviewer`/`accuracy-verifier`, commit, move on.
+  Don't ask "should I continue" — check in only for: missing credentials or
+  other hard blockers, a business/legal decision explicitly flagged as
+  needing deliberate human input (e.g. PLANNING.md's defense-side question),
+  or an action that's costly/destructive/hard to reverse. Everything else,
+  make the call and keep moving; report what shipped when it's done.
 - Plan before implementing on anything non-trivial. See `/ship` skill and
   `prompts/orchestrator-prompt.md`.
 - Route verbose, disposable work (log digging, broad codebase search,
