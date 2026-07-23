@@ -1,12 +1,22 @@
 #!/bin/bash
 # Runs after every Edit/Write. Keep this fast — it fires a lot.
-# Fill in your actual linter once the stack is chosen, e.g.:
-#   npx eslint --quiet . || exit 1
-#   ruff check . || exit 1
 #
 # Exit 0 = ok, non-zero blocks nothing here (PostToolUse can't block the
 # edit that already happened) but stderr output is surfaced back to Claude,
 # which is enough to prompt a self-correction on the next turn.
 
-echo "post-edit-check: no linter configured yet — edit scripts/post-edit-check.sh" >&2
+INPUT=$(cat)
+FILE_PATH=$(echo "$INPUT" | jq -r '.tool_input.file_path // empty')
+
+case "$FILE_PATH" in
+  */api/*.py)
+    # ponytail: lints the whole api/ tree instead of just the touched file —
+    # fine at this size, switch to a single-file lint if it gets slow.
+    [ -x api/.venv/Scripts/python.exe ] && (cd api && .venv/Scripts/python.exe -m ruff check .) >&2
+    ;;
+  */web/*.ts|*/web/*.tsx)
+    [ -f web/package.json ] && (cd web && npx eslint . --quiet) >&2
+    ;;
+esac
+
 exit 0

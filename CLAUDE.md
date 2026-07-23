@@ -13,24 +13,37 @@ adjacent case types. Do not build phase 2 ingestion paths unless a task
 explicitly says to; keep the document pipeline the priority until it's solid.
 
 ## Tech stack
-[Fill in once decided — e.g. Python/FastAPI backend, Postgres, Next.js
-frontend. Keep this section to 3-4 lines. Update it the day the stack
-changes, not after.]
+FastAPI (Python 3.13) backend in `api/`, handling ingest/OCR/chunking and
+all LLM calls. Next.js (TypeScript, App Router) frontend in `web/` for the
+attorney review UI. Supabase (Postgres + pgvector, Auth, Storage) for data.
+Anthropic Claude for chronology generation/summarization; Voyage AI
+(`voyage-3`) for chunk embeddings.
 
 ## Commands
 ```bash
-[dev server command]
-[test command]
-[lint command]
-[migration command]
+# api/ (from repo root)
+cd api && .venv/Scripts/python.exe -m uvicorn main:app --reload   # dev server
+cd api && .venv/Scripts/python.exe -m pytest                      # test
+cd api && .venv/Scripts/python.exe -m ruff check .                # lint
+
+# web/ (from repo root)
+npm run dev --prefix web      # dev server
+npm run lint --prefix web     # lint
+npm run build --prefix web    # build/typecheck
+
+# supabase/ (from repo root)
+npx supabase db push          # apply migrations to the linked project
 ```
 
 ## Architecture (one paragraph, not a tour)
-[e.g. "Documents land in /ingest, get OCR'd and chunked in the parser
-service, chunks are embedded and stored in Postgres, the chronology
-builder queries them in date order and calls the LLM for summarization.
-Frontend reads finished chronologies from the API, nothing talks to the
-LLM directly from the client."]
+Attorneys upload case documents through the `web/` Next.js UI; files land in
+Supabase Storage. The `api/` FastAPI service OCRs and chunks each document
+(`ingest/`), extracts dates/entities (`extraction/`), and stores chunks with
+embeddings in Postgres/pgvector. `chronology/` queries chunks in date order
+and calls Claude to build the chronology — this is the only module allowed
+to call an LLM. `flags/` cross-checks chunks for inconsistencies. `web/`
+reads the finished chronology from the API for attorney review, edit, and
+sign-off; nothing in `web/` talks to the LLM or Supabase directly.
 
 ## Domain vocabulary
 - **Chronology**: the date-ordered timeline of events built from a case's
