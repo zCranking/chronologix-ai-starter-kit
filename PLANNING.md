@@ -12,13 +12,21 @@ flagged inconsistencies, reviewed and correctable by an attorney before
 it's final.
 
 Definition of done for this phase:
-- [ ] Document ingestion (upload, OCR if needed, chunking)
-- [ ] Chronology builder (date extraction, ordering, summarization)
-- [ ] Inconsistency flagging (conflicting dates, contradicting statements)
-- [ ] Every chronology entry traces to a source document and page/location
+- [x] Document ingestion (upload, OCR if needed, chunking) — `api/ingest/`
+- [x] Chronology builder (date extraction, ordering, summarization) —
+      `api/extraction/dates.py` + `api/chronology/build.py`, built and
+      tested against a mocked LLM (no Anthropic key yet — see below)
+- [x] Inconsistency flagging (conflicting dates, contradicting statements) —
+      `api/flags/detect.py`, same mocked-LLM caveat
+- [x] Every chronology entry traces to a source document and page/location —
+      enforced in `chronology/build.py`'s prompt + insert, not fabricated
 - [ ] Attorney review/edit UI before a chronology is marked final
 - [ ] `accuracy-verifier` subagent run against a held-out test case with
-      known ground truth, passing with zero hallucinated facts
+      known ground truth, passing with zero hallucinated facts — **blocked
+      on a real `ANTHROPIC_API_KEY`**; everything above is built against a
+      mocked LLM and has never produced real output. Do not treat the
+      checked items above as "trustworthy chronology output achieved" —
+      only as "the code path exists and is unit-tested."
 
 ## Future phases (not started — do not build ahead of this)
 
@@ -64,3 +72,24 @@ what shipped, what a reviewer caught, what got moved to CLAUDE.md.
   contradicted docs/architecture.md about which modules may call an LLM
   (chronology/ *and* flags/, not chronology/ alone) — both fixed and
   re-verified.
+- 2026-07-23: Live Supabase project created (`chronologix-ai`, id
+  `nhjmnuuhlwkurducenct`) and all migrations applied, including a firms/
+  firm_members addition for the per-firm access model (cases now have a
+  `firm_id`; real auth isn't wired up yet, so a placeholder dev firm is
+  seeded — see the `ponytail:` comment in migration 3). RLS enabled
+  default-deny on all tables (api/ uses the service-role key, bypasses it;
+  web/ never talks to Supabase directly). Built most of Phase 1's backend:
+  LLM/embedding provider wrappers (Anthropic + Voyage direct SDKs, not
+  LiteLLM — LiteLLM has no Windows wheel and needs a Rust+MSVC toolchain to
+  build from source, rejected as too heavy for this dev machine), ingest
+  pipeline (pypdf/pymupdf/pytesseract/python-docx, Tesseract installed via
+  winget), regex-based date extraction, chronology builder, flags
+  detection, and the API routes tying them together. All built TDD via
+  parallel `builder` dispatches + `code-reviewer` passes; reviewers caught
+  and fixes landed for: a pipeline error-handling gap (a failed initial
+  document fetch never marked the doc "failed", leaving it stuck
+  "pending" forever) and a date-ordering bug (mixed-format dates came back
+  grouped by regex pattern, not document order). Chronology/flags
+  generation has never run against the real Claude API — no
+  `ANTHROPIC_API_KEY` yet — so `accuracy-verifier` cannot run until that's
+  provided. Attorney review/edit UI (`web/`) not started.
