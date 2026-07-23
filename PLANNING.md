@@ -48,3 +48,19 @@ Add a dated one-line entry each session with anything worth remembering:
 what shipped, what a reviewer caught, what got moved to CLAUDE.md.
 
 - YYYY-MM-DD: [example] Kicked off repo, added starter kit.
+- 2026-07-23: Environment setup (not a Phase 1 feature — none of the Definition
+  of Done items above are started). Stack decided: FastAPI backend (`api/`),
+  Next.js frontend (`web/`), Supabase Postgres/pgvector/Auth/Storage, Claude
+  for chronology generation, Voyage AI (`voyage-3`) for chunk embeddings.
+  Scaffolded all three plus the initial `cases/documents/chunks/
+  chronology_entries/flags` schema migration; filled in CLAUDE.md's
+  tech-stack/commands/architecture placeholders and wired
+  `scripts/post-edit-check.sh` to ruff/eslint. Open item: the Supabase
+  migration is written but not applied — needs `supabase login` + `supabase
+  link --project-ref <ref>` + `supabase db push` with the account holder's
+  credentials once a real project exists. Reviewer caught two real bugs in
+  the lint-hook fill-in: its glob patterns didn't match bare relative paths
+  (hook silently did nothing), and CLAUDE.md's architecture paragraph
+  contradicted docs/architecture.md about which modules may call an LLM
+  (chronology/ *and* flags/, not chronology/ alone) — both fixed and
+  re-verified.
