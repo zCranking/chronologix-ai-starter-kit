@@ -47,6 +47,19 @@ def test_process_document_marks_failed_and_reraises_on_extraction_error(monkeypa
     db.table.return_value.update.assert_called_once_with({"status": "failed"})
 
 
+def test_process_document_marks_failed_and_reraises_on_document_fetch_error(monkeypatch):
+    db = MagicMock()
+    db.table.return_value.select.return_value.eq.return_value.single.return_value.execute.side_effect = (
+        RuntimeError("supabase timeout")
+    )
+    monkeypatch.setattr(pipeline, "get_client", lambda: db)
+
+    with pytest.raises(RuntimeError):
+        pipeline.process_document("doc-1")
+
+    db.table.return_value.update.assert_called_once_with({"status": "failed"})
+
+
 def test_process_document_skips_chunk_insert_when_no_chunks(monkeypatch):
     doc_row = {"id": "doc-1", "storage_path": "case-1/doc.pdf", "original_filename": "doc.pdf"}
     db = _fake_db(doc_row)

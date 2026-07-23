@@ -6,8 +6,8 @@ from ingest.parse import extract_text
 
 def process_document(document_id: str) -> None:
     db = get_client()
-    doc_row = db.table("documents").select("*").eq("id", document_id).single().execute().data
     try:
+        doc_row = db.table("documents").select("*").eq("id", document_id).single().execute().data
         file_bytes = db.storage.from_("documents").download(doc_row["storage_path"])
         pages = extract_text(file_bytes, doc_row["original_filename"])
         chunks = chunk_text(pages)
