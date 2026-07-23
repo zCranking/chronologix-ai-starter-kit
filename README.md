@@ -49,6 +49,9 @@ Then either:
 CLAUDE.md                        persistent project context (read every session)
 PLANNING.md                      living roadmap + session log
 .mcp.json                        MCP server config (template — empty until wired up)
+api/                              FastAPI backend (ingest, extraction, chronology, flags)
+web/                              Next.js frontend (attorney review UI)
+supabase/                         Postgres/pgvector schema migrations
 .claude/settings.json            hooks + permission guardrails
 .claude/agents/
   builder.md                     implements one scoped increment at a time
