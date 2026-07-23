@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     supabase_service_key: str = ""
     anthropic_api_key: str = ""
     voyage_api_key: str = ""
+    tesseract_cmd: str = ""
 
 
 settings = Settings()
