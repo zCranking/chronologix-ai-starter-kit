@@ -6,14 +6,17 @@ from extraction.dates import extract_dates
 
 _PROMPT_TEMPLATE = """You are building a legal case chronology from source excerpts below.
 Each excerpt is tagged with a source type ("document" or "evidence"), its source id, a location (a page number for documents, or a timestamp like "00:04:30" for evidence), and any date detected in it. Evidence excerpts may also show a speaker label.
+
+Multiple short excerpts often describe one continuous event (for example, several short utterances from the same witness answer). Group excerpts that describe the same event into one entry, but the summary for that entry MUST cover every distinct material fact stated across those excerpts. A dropped fact is a worse error than a long summary -- if the material facts don't fit in one or two sentences, write a longer summary rather than omitting anything. This includes negative observations (e.g. "did not see the driver exit the vehicle") -- those are material facts too, not filler.
+
 Produce a JSON array of chronology entries, each with:
-- "event_date": the date of the event in the excerpt, ISO format YYYY-MM-DD
-- "summary": a concise one or two sentence summary of what happened, based only on this excerpt
+- "event_date": the date of the event, ISO format YYYY-MM-DD
+- "summary": a summary covering every distinct material fact, claim, or observation (including negative ones) from the excerpt(s) it's based on -- do not omit anything for brevity
 - "source_type": "document" or "evidence", copied from the excerpt tag
 - "source_id": the source id from the excerpt tag
-- "source_location": the location from the excerpt tag
+- "source_location": the location from the excerpt tag (if grouping multiple excerpts, use the location of the excerpt where the summarized event begins)
 
-Only include facts explicitly stated in the excerpts. Do not infer, combine, or embellish. If an excerpt has no determinable date, omit it from the output. Return ONLY the JSON array, no other text.
+Only include facts explicitly stated in the excerpts. Do not infer, combine, or embellish beyond what's stated. If an excerpt has no determinable date, omit it from the output. Return ONLY the JSON array, no other text.
 
 EXCERPTS:
 {excerpts}
