@@ -6,6 +6,7 @@ from pydantic import BaseModel
 
 from chronology.build import build_chronology
 from core.db import get_client
+from demands.draft import draft_demand_letter
 from evidence.pipeline import process_evidence
 from flags.detect import detect_flags
 from ingest.pipeline import process_document
@@ -57,6 +58,18 @@ class EvidenceResponse(BaseModel):
     original_filename: str
     media_type: str
     confirmed_by_attorney: bool
+
+
+class DemandLetterResponse(BaseModel):
+    id: str
+    case_id: str
+    body: str
+    version: int
+    edited_by_attorney: bool
+
+
+class UpdateDemandLetterRequest(BaseModel):
+    body: str
 
 
 _VIDEO_EXTENSIONS = {"mp4", "mov", "avi", "mkv", "webm"}
@@ -254,4 +267,53 @@ def confirm_evidence(case_id: str, evidence_id: str) -> dict:
     )
     if not result.data:
         raise HTTPException(status_code=404, detail="evidence not found")
+    return result.data[0]
+
+
+@app.post("/cases/{case_id}/demand-letter", response_model=DemandLetterResponse)
+def generate_demand_letter(case_id: str) -> dict:
+    try:
+        return draft_demand_letter(case_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/cases/{case_id}/demand-letters", response_model=list[DemandLetterResponse])
+def list_demand_letters(case_id: str) -> list[dict]:
+    db = get_client()
+    return (
+        db.table("demand_letters")
+        .select("*")
+        .eq("case_id", case_id)
+        .order("version", desc=True)
+        .execute()
+        .data
+    )
+
+
+@app.patch("/cases/{case_id}/demand-letters/{letter_id}", response_model=DemandLetterResponse)
+def update_demand_letter(case_id: str, letter_id: str, payload: UpdateDemandLetterRequest) -> dict:
+    db = get_client()
+    existing = (
+        db.table("demand_letters")
+        .select("*")
+        .eq("id", letter_id)
+        .eq("case_id", case_id)
+        .maybe_single()
+        .execute()
+    )
+    if not existing.data:
+        raise HTTPException(status_code=404, detail="demand letter not found")
+    result = (
+        db.table("demand_letters")
+        .update(
+            {
+                "body": payload.body,
+                "version": existing.data["version"] + 1,
+                "edited_by_attorney": True,
+            }
+        )
+        .eq("id", letter_id)
+        .execute()
+    )
     return result.data[0]
