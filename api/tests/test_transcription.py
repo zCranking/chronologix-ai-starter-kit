@@ -35,6 +35,27 @@ def test_transcribe_returns_utterance_segments(monkeypatch):
         utterances=True,
         punctuate=True,
         smart_format=True,
+        keyterm=transcription.DEFAULT_KEYTERMS,
+    )
+
+
+def test_transcribe_accepts_custom_keyterms(monkeypatch):
+    fake_response = MagicMock()
+    fake_response.results.utterances = []
+    fake_client = MagicMock()
+    fake_client.listen.v1.media.transcribe_file.return_value = fake_response
+    monkeypatch.setattr(transcription, "_get_client", lambda: fake_client)
+
+    transcription.transcribe(b"audio", keyterms=["lumbar strain", "MRI"])
+
+    fake_client.listen.v1.media.transcribe_file.assert_called_once_with(
+        request=b"audio",
+        model="nova-3",
+        diarize=True,
+        utterances=True,
+        punctuate=True,
+        smart_format=True,
+        keyterm=["lumbar strain", "MRI"],
     )
 
 
