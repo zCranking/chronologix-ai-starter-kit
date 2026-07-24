@@ -118,12 +118,16 @@ export default function CaseDetailPage({
   }
 
   async function saveEdit(entry: ChronologyEntry) {
+    const changes: { summary?: string; event_date?: string } = {};
+    if (editSummary !== entry.summary) changes.summary = editSummary;
+    if (editDate !== entry.event_date) changes.event_date = editDate;
+    if (Object.keys(changes).length === 0) {
+      setEditingEntryId(null);
+      return;
+    }
     setSavingEdit(true);
     setError(null);
     try {
-      const changes: { summary?: string; event_date?: string } = {};
-      if (editSummary !== entry.summary) changes.summary = editSummary;
-      if (editDate !== entry.event_date) changes.event_date = editDate;
       const updated = await api.updateChronologyEntry(caseId, entry.id, changes);
       setChronology((prev) => prev.map((e) => (e.id === updated.id ? updated : e)));
       setEditingEntryId(null);
