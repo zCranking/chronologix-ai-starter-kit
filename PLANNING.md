@@ -4,7 +4,7 @@ This file is the living plan. The `builder` and `code-reviewer` subagents
 should read it before starting work; whoever runs a session should update
 it at the end. Keep entries short — this is a log and a map, not a report.
 
-## Current phase: Phase 1 — Document chronology MVP
+## Phase 1 — Document chronology MVP (COMPLETE, live-verified 2026-07-24)
 
 Goal: given a folder of medical records, depositions, and incident reports
 for one case, produce a date-ordered chronology with source citations and
@@ -55,12 +55,43 @@ PDF, with Claude correctly parsing through realistic OCR character noise;
 multi-document cases with correct cross-document chronological ordering
 and per-entry source attribution.
 
-## Future phases (not started — do not build ahead of this)
+## Current phase: Phase 2 — Multi-source ingestion
 
-**Phase 2 — Multi-source ingestion.** Add video/audio (surveillance
-footage, recorded statements) as inputs to the same chronology, with
-timestamp syncing against the existing document-based timeline. Heavier
-human review built in by default, not treated as a formality.
+Goal: add video/audio (surveillance footage, recorded statements) as
+inputs to the same chronology, with timestamp citations alongside the
+existing page citations. Heavier human review built in by default, not
+treated as a formality.
+
+Definition of done for this phase:
+- [x] Video/audio upload, transcription (Deepgram, diarized utterances
+      with timestamps) — `api/core/transcription.py`, `api/evidence/`
+- [x] Attorney confirmation gate before a transcript can feed into
+      chronology generation — `evidence.confirmed_by_attorney`; enforced
+      in `chronology/build.py`'s fetch, not just at the UI layer
+- [x] Chronology entries can cite evidence (timestamp) as well as
+      documents (page) — `chronology_entries.source_evidence_id`, a
+      unified excerpt shape in `chronology/build.py`, DB check constraint
+      enforcing exactly one source per entry
+- [x] Evidence upload/confirm UI — `web/`, build/lint clean, reviewed
+- [ ] `accuracy-verifier` pass specifically on an evidence-sourced (not
+      just document-sourced) chronology entry, against known ground truth
+- [ ] Real, non-synthetic video/audio test (everything verified so far
+      used a synthetic TTS-generated WAV file and Windows SAPI — realistic
+      for testing the pipeline mechanics, but not a substitute for a real
+      recording with actual background noise, cross-talk, and accents)
+
+**Live-verified 2026-07-24** (same session as Phase 1, immediately after):
+real Deepgram transcription (Windows SAPI-generated synthetic speech, not
+just silence/noise), correct diarization/timestamps, real Voyage
+embeddings on segments, the confirmation gate actually blocking
+unconfirmed evidence from `POST /cases/{id}/chronology` (verified empty
+result pre-confirm, correct evidence-cited entry post-confirm with
+`source_document_id: null` / `source_evidence_id` set / timestamp
+location). Review caught one real gap, fixed: `_build_row` silently
+routed any unrecognized `source_type` to the document column instead of
+rejecting it — now raises.
+
+## Future phases (not started — do not build ahead of this)
 
 **Phase 3 — Move up the value chain.** Auto-drafted demand letters and
 settlement packages generated from a finished chronology. Case value
@@ -141,3 +172,25 @@ what shipped, what a reviewer caught, what got moved to CLAUDE.md.
   started — Phase 2 requires a scoping/design conversation before any
   code, and Phase 4 still has its flagged defense-side conflict-of-interest
   question open, unresolved by design (needs the account holder's decision).
+- 2026-07-24 (same session, continued): started Phase 2 after a quick
+  scoping check-in (one real decision: Deepgram for transcription, over
+  AssemblyAI or building our own Whisper pipeline). Added
+  `core/transcription.py`, `evidence/pipeline.py` (upload → Deepgram
+  diarized transcription → segment → embed → store, same shape and same
+  fetch-inside-try/embed-failure-tolerance fixes as the document
+  pipeline), the `evidence`/`evidence_segments` schema with a check
+  constraint enforcing every chronology entry cites exactly one of a
+  document or evidence, the confirmation-gate endpoint, and the evidence
+  upload/confirm UI. `chronology/build.py` now merges documents and
+  confirmed evidence into one unified, date-sorted prompt. `DEEPGRAM_API_KEY`
+  arrived mid-session; live-verified with a real Windows-SAPI-generated
+  speech WAV file (not just silence) — real diarized transcription, real
+  embeddings, the confirmation gate correctly blocking unconfirmed
+  evidence, correct timestamp citations post-confirmation. Review caught
+  and fixed one real gap: `_build_row` silently misrouted an unrecognized
+  `source_type` to the document column instead of rejecting it. Remaining
+  before Phase 2 can be called done the way Phase 1 is: an
+  `accuracy-verifier` pass on an evidence-sourced entry specifically, and
+  a real (non-synthetic) recording test — TTS speech validates pipeline
+  mechanics but not real-world audio quality (background noise,
+  cross-talk, accents). Phases 3-4 still untouched, same reasons as above.
