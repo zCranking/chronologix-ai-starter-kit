@@ -4,37 +4,89 @@ This is the detailed version. Keep CLAUDE.md's architecture section to one
 paragraph and link here for anything longer — CLAUDE.md loads into every
 session's context, this file only loads when someone (or an agent) opens it.
 
-## Suggested shape for Phase 1 (edit once you've actually decided)
+## Repo shape (as built)
 
 ```
-ingest/        # upload handling, OCR for scanned records, chunking
-extraction/    # date/entity extraction from chunks
-chronology/    # ordering, summarization, source-citation logic
-flags/         # inconsistency detection
-review/        # attorney review + edit UI, sign-off state machine
-api/           # thin layer the frontend talks to
+api/
+  core/          # provider wrappers + shared infra — the only place external APIs are called
+    db.py            # Supabase client (service role)
+    llm.py            # Anthropic (Claude) — generate(), strip_json_fence()
+    embeddings.py      # Voyage AI — embed()
+    transcription.py    # Deepgram — transcribe()
+    config.py            # Settings (pydantic-settings, reads api/.env)
+  ingest/        # Phase 1: document upload → OCR/parse → chunk → embed → store
+  evidence/      # Phase 2: video/audio upload → transcribe → segment → embed → store
+  extraction/    # non-LLM date extraction from chunk/segment text (regex-based, deliberately not authoritative)
+  chronology/    # ordering, summarization, source-citation — the only modules (with flags/) allowed to call an LLM
+  flags/         # inconsistency detection
+  main.py        # FastAPI routes — thin, delegates to the modules above
+web/             # Next.js — attorney review UI (case list, upload, generate, edit, sign-off, evidence confirm)
+supabase/migrations/   # schema, applied in order
 ```
 
-Suggested rule of thumb: nothing outside `chronology/` and `flags/` should
-be calling an LLM directly. Keep the actual "generate a claim about a case"
-logic centralized so it's the one place `accuracy-verifier` needs to focus
-its scrutiny, rather than scattered LLM calls across the codebase that are
-harder to audit for hallucination risk.
+Rule that's actually enforced, not just suggested: nothing outside
+`chronology/` and `flags/` calls an LLM. `core/llm.py` is the only place
+the Anthropic SDK is touched; `chronology/build.py` and `flags/detect.py`
+are its only callers. This keeps `accuracy-verifier`'s scrutiny centralized
+instead of chasing scattered LLM calls.
 
-## Data flow (fill in once real)
+## Data flow (as built)
 
-1. [Document upload → storage]
-2. [OCR / text extraction, if needed]
-3. [Chunking + date/entity extraction]
-4. [Chronology assembly + summarization]
-5. [Flagging]
-6. [Attorney review + sign-off]
-7. [Final chronology available to the case team]
+**Documents (Phase 1):**
+1. Upload via `web/` → `POST /cases/{id}/documents` → stored in Supabase
+   Storage bucket `documents`, a `documents` row created with `status:
+   pending`, processing scheduled via FastAPI `BackgroundTasks`.
+2. `ingest/pipeline.py`: download → `ingest/parse.py` (pypdf text layer,
+   pymupdf+pytesseract OCR fallback for pages with no text layer,
+   python-docx for `.docx`) → `ingest/chunk.py` (fixed-size chunking) →
+   `core/embeddings.py` (Voyage; failure degrades to a null embedding,
+   never blocks ingest — nothing reads embeddings for retrieval yet) →
+   `chunks` rows stored, `documents.status: processed`.
 
-## Things worth deciding early, not organically
-- Where the "source of truth" copy of each uploaded document lives, and
-  how every chronology entry's citation points back to an exact
-  location in it (page number, line, or timestamp for future video/audio).
-- How a corrected/edited chronology entry is versioned — an attorney's
-  manual correction should never be silently overwritten by a re-run of
-  the pipeline.
+**Evidence (Phase 2):**
+1. Upload via `web/` → `POST /cases/{id}/evidence` → stored in Storage
+   bucket `evidence`, an `evidence` row created with `status: pending`,
+   `media_type` inferred from extension, `confirmed_by_attorney: false`.
+2. `evidence/pipeline.py`: download → `core/transcription.py` (Deepgram,
+   diarized utterances with timestamps) → same embedding-failure
+   tolerance as documents → `evidence_segments` rows stored,
+   `evidence.status: transcribed`.
+3. **An unconfirmed transcript is invisible to chronology generation.**
+   `POST /cases/{id}/evidence/{evidence_id}/confirm` sets
+   `confirmed_by_attorney: true` — this is the Phase 2 "heavier review by
+   default" requirement, not a formality. `chronology/build.py` only
+   queries evidence where `confirmed_by_attorney = true`.
+
+**Chronology (both source types, unified):**
+1. `chronology/build.py` fetches chunks (all documents in the case) and
+   evidence_segments (confirmed evidence only), normalizes both into a
+   common excerpt shape (`source_type`, `source_id`, `location`, content),
+   sorts by a regex-detected date (`extraction/dates.py` — a first pass,
+   not authoritative; undated excerpts sort last).
+2. One Claude call over the combined excerpts produces cited entries.
+   `source_type` in the response routes to `source_document_id` (page
+   citation) or `source_evidence_id` (`HH:MM:SS` timestamp citation) —
+   the DB enforces exactly one is set via a check constraint. An
+   unrecognized `source_type` raises rather than silently misrouting.
+3. Regeneration never overwrites an attorney-edited entry — the delete
+   step only clears `edited_by_attorney = false` rows before inserting a
+   fresh set, keyed on `(source_id, location, event_date)` to avoid both
+   duplicating unrelated events sharing a location and silently dropping
+   an edited entry's sibling events. Return value is the edited + fresh
+   entries combined, sorted by date — the API returns the true current
+   state of the case, not a partial view.
+4. `flags/detect.py` runs separately, over the finished chronology entries.
+5. Attorney reviews in `web/`: edits via `PATCH` (bumps `version`, sets
+   `edited_by_attorney`), signs off via `POST .../sign-off`
+   (`chronology_signed_off` + timestamp on `cases`) — nothing is final
+   without this.
+
+## Decisions made (previously "decide early, not organically")
+
+- Source-of-truth documents/evidence live in Supabase Storage
+  (`documents`/`evidence` buckets); citations point back via
+  `(source_document_id, source_location)` or `(source_evidence_id,
+  source_location)` on `chronology_entries`.
+- Attorney corrections are versioned via `chronology_entries.version` +
+  `edited_by_attorney`; regeneration is edit-aware (see above), not a
+  blind overwrite.
