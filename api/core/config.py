@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""
     voyage_api_key: str = ""
     tesseract_cmd: str = ""
+    deepgram_api_key: str = ""
 
 
 settings = Settings()
