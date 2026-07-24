@@ -23,17 +23,37 @@ Definition of done for this phase:
 - [x] Attorney review/edit UI before a chronology is marked final — `web/`
       (case list, upload, generate, inline edit, sign-off), build/lint
       clean, reviewed. Never exercised against a live backend (see below).
-- [ ] `accuracy-verifier` subagent run against a held-out test case with
-      known ground truth, passing with zero hallucinated facts — **blocked
-      on three missing credentials**: `SUPABASE_SERVICE_KEY` (needed just
-      to run `api/` at all — a live smoke test this session hit
-      `SupabaseException: supabase_key is required` on the very first
-      request), `ANTHROPIC_API_KEY`, and `VOYAGE_API_KEY`. Every backend
-      module above is unit-tested against mocks only and has NEVER run
-      end-to-end against real Supabase, real Claude, or real Voyage. Do
-      not treat the checked items above as "trustworthy chronology output
-      achieved" —
-      only as "the code path exists and is unit-tested."
+- [x] `accuracy-verifier` subagent run against a held-out test case with
+      known ground truth, passing with zero hallucinated facts — **DONE
+      2026-07-24, real credentials, real Claude/Voyage/Supabase, PASS.**
+      Zero hallucinations, correct chronological ordering, correct
+      source traceability, no dropped material events. Phase 1's
+      Definition of Done is now genuinely met, not just unit-tested.
+
+**Phase 1 is complete and live-verified**, not just built. All credentials
+landed 2026-07-24; a full live end-to-end pass (real Supabase, real Claude,
+real Voyage, real Tesseract OCR) surfaced and fixed 4 real bugs that no
+amount of mocked unit testing could have caught:
+1. Claude wraps JSON responses in markdown code fences even when told not
+   to — `json.loads()` failed on every real chronology/flags call until
+   `core.llm.strip_json_fence()` was added.
+2. `build_chronology` had no protection against re-inserting a fresh entry
+   for an event an attorney had already manually corrected — first found
+   as silent duplication, fixed, but the first fix's dedup key
+   (document + page) was too coarse and caused a second failure mode
+   (dropping unrelated, never-edited events that happened to share a page
+   with an edited one) — now keys on (document, page, event_date), with a
+   documented remaining edge case (two distinct same-day events on one
+   page would still collide; needs a real per-event id if that matters).
+3. The combined edited+regenerated entry list wasn't sorted by date.
+4. A failed/missing embedding call was taking down the entire document's
+   ingest, even though chronology generation doesn't use embeddings for
+   retrieval yet — decoupled so ingest succeeds regardless.
+
+Also live-verified: real Tesseract OCR on an image-only (no text layer)
+PDF, with Claude correctly parsing through realistic OCR character noise;
+multi-document cases with correct cross-document chronological ordering
+and per-entry source attribution.
 
 ## Future phases (not started — do not build ahead of this)
 
@@ -100,3 +120,24 @@ what shipped, what a reviewer caught, what got moved to CLAUDE.md.
   generation has never run against the real Claude API — no
   `ANTHROPIC_API_KEY` yet — so `accuracy-verifier` cannot run until that's
   provided. Attorney review/edit UI (`web/`) not started.
+- 2026-07-24: All three credentials (`SUPABASE_SERVICE_KEY`, `ANTHROPIC_API_KEY`,
+  `VOYAGE_API_KEY`) provided. Built and shipped the attorney review UI
+  (`web/`, case list/upload/generate/edit/sign-off), reviewed clean. Then
+  ran a full live end-to-end pass against real Supabase/Claude/Voyage/
+  Tesseract for the first time — found and fixed 4 real bugs unit tests
+  couldn't catch (Claude's markdown-fenced JSON responses, chronology
+  duplicate-on-regeneration in two successive failure modes, unsorted
+  combined return value, embedding failure blocking ingest entirely — see
+  Definition of Done section above for detail). `accuracy-verifier` then
+  ran for real against a synthetic ground-truth case and PASSED: zero
+  hallucinations, correct ordering, correct traceability. Also
+  live-verified real OCR (image-only PDF, realistic character noise,
+  Claude parsed through it correctly) and multi-document cross-referencing.
+  Phase 1 Definition of Done is now fully checked off and genuinely
+  verified, not just unit-tested. Test data cleaned from the live Supabase
+  project afterward (3 small orphaned Storage files remain — Supabase
+  blocks direct SQL deletion of storage objects; not worth a cleanup
+  script for a free-tier dev project). Phases 2-4 intentionally not
+  started — Phase 2 requires a scoping/design conversation before any
+  code, and Phase 4 still has its flagged defense-side conflict-of-interest
+  question open, unresolved by design (needs the account holder's decision).
