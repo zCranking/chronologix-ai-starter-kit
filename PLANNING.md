@@ -174,17 +174,41 @@ medical malpractice case types (same document shapes, different
 evaluation standard). Integration as an add-on inside case management
 platforms (e.g. Clio, Filevine, Litify) rather than only direct sales.
 
-**Open question, needs a deliberate decision, not a default:** whether to
-ever sell a defense-side or insurer-facing version of this tool. Doing so
-alongside the plaintiff-side product creates a conflict of interest that
-needs a structural answer (separate entity, data walls, or picking a lane)
-before it's built, not after.
+**Open question — DECIDED 2026-07-24:** whether to sell a defense-side or
+insurer-facing version. **Decision: no — plaintiff-side only.** Do not build
+a defense lane. (Kept here for the record; the conflict-of-interest concern
+that motivated the question no longer needs a structural answer because we're
+committing to a single lane.)
+
+## Where to go next (both directions intentionally open)
+
+See `docs/SESSION-HANDOFF.md` for the detailed version. In short, two
+independently-pickable directions from the current state:
+- **A — demo-surface polish** (easier to show people, no login wall): PDF/print
+  export of chronologies and demand letters, an in-app "load demo case"
+  button, loading states during multi-second LLM calls.
+- **B — production hardening** (toward real firms; adds a login wall so
+  sequence it past the demo stage): real Supabase Auth replacing the
+  `DEV_FIRM_ID` placeholder, per-firm RLS policies, a real non-synthetic
+  recording test, and the BAA/consent groundwork any real-PHI handling needs.
 
 ## Session log
 Add a dated one-line entry each session with anything worth remembering:
 what shipped, what a reviewer caught, what got moved to CLAUDE.md.
 
 - YYYY-MM-DD: [example] Kicked off repo, added starter kit.
+- 2026-07-24 (session close): defense-side question DECIDED — plaintiff-side
+  only, no defense lane. Demo-hardening pass: added CORS (a real
+  demo-breaker the mock/curl tests never surfaced), redesigned the UI around
+  the provenance-timeline identity (Spectral/Inter/JetBrains-Mono, dated
+  timeline spine, source-colored markers, verify-state badges), added
+  `api/seed_demo.py` (synthetic Rivera v. Deng demo case), and rewrote the
+  README as a real run guide. Wrote `docs/SESSION-HANDOFF.md` (the
+  read-first resume doc) and `docs/RETROSPECTIVE.md` (mistakes + process +
+  Windows gotchas) so future/low-context sessions can pick up either open
+  direction (demo polish vs. production auth/RLS) without re-reading the
+  whole history. Ended with ~90 tests green, clean tree. Local servers
+  stopped; repo to be pushed to a private GitHub remote by the owner.
 - 2026-07-24 (continued): Phase 3 demand-letter drafting. Switched to an
   explicit two-tier model split at the user's request — Opus as
   orchestrator (design, decomposition, safety-critical judgment, review

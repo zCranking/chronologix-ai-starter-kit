@@ -74,15 +74,44 @@ to the LLM or Supabase directly.
   Agreement) with a vendor before you wire up a new third-party API or MCP
   server that will touch case documents.
 
+> New session? Read `docs/SESSION-HANDOFF.md` first (current state, how to
+> run, the two open directions), then this file. `docs/RETROSPECTIVE.md` has
+> the full "why" behind the hard rules below.
+
 ## Working agreements
 - Work autonomously through planned phases/sub-projects without pausing for
   approval between them: design briefly, plan, delegate implementation to
   `builder`, verify with `code-reviewer`/`accuracy-verifier`, commit, move on.
   Don't ask "should I continue" — check in only for: missing credentials or
   other hard blockers, a business/legal decision explicitly flagged as
-  needing deliberate human input (e.g. PLANNING.md's defense-side question),
+  needing deliberate human input (e.g. PLANNING.md's defense-side question,
+  now decided: plaintiff-side only, do not build a defense lane),
   or an action that's costly/destructive/hard to reverse. Everything else,
   make the call and keep moving; report what shipped when it's done.
+- **Unit tests are the floor, not the proof. Live-verify anything that
+  touches an LLM, an external API, or the browser.** A full green mock suite
+  has repeatedly hidden broken real integrations (Claude wrapping JSON in
+  markdown fences, a dropped material fact, missing CORS, an unset
+  credential). Mocks return clean data by construction. Run the real thing
+  end to end, and run `accuracy-verifier` on chronology/flag/demand output
+  against known ground truth. Full detail in `docs/RETROSPECTIVE.md`.
+- **Model-tier orchestration** (keep this split): the orchestrator handles
+  design, decomposition, safety-critical judgment, review adjudication, and
+  inline accuracy checks; delegate implementation to a cheaper `builder`
+  (cheapest tier when handed complete code, mid-tier for prose-described
+  work); reviews run on a mid-tier `code-reviewer`; reserve the strongest
+  model for `accuracy-verifier` and genuine factual judgment. Builders never
+  run `git` — the orchestrator commits, sequentially, to avoid concurrent
+  writes to the shared index.
+- **Before dispatching a review, verify the commit's real parent** with
+  `git log --oneline` and hand the reviewer the correct `parent..HEAD` range.
+  A wrong parent produces false-positive "scope creep" findings.
+- **Verify a new dependency actually installs and imports on this machine
+  before designing around it.** LiteLLM and `unstructured` were both chosen
+  then abandoned (no Windows wheel / too heavy). Prefer libs with prebuilt
+  Windows wheels. Windows gotchas (Tesseract via winget, `taskkill` not
+  `pkill`, `tr` not `${//}` for backslashes, scratchpad not `/tmp`) are in
+  `docs/RETROSPECTIVE.md`.
 - Plan before implementing on anything non-trivial. See `/ship` skill and
   `prompts/orchestrator-prompt.md`.
 - Route verbose, disposable work (log digging, broad codebase search,
