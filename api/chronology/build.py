@@ -44,6 +44,17 @@ def build_chronology(case_id: str) -> list[dict]:
     # re-run must not create a second, stale-vs-corrected entry for the same
     # excerpt either. Fetch already-edited entries first so both the
     # overwrite guard and the duplicate guard can key off them.
+    #
+    # ponytail: chunking is page-granular, not event-granular, so a single
+    # page (one source_location) routinely yields multiple distinct events
+    # from one chunk -- (source_document_id, source_location) alone isn't a
+    # reliable "same excerpt" key (a live test caught this: editing one visit
+    # on a page caused every other, unrelated visit on that same page to be
+    # dropped on regeneration). Including event_date narrows this enough for
+    # Phase 1; it would still under-dedup two genuinely different events on
+    # the same page with the same date -- a real per-event identifier
+    # (e.g. a chunk/event id on chronology_entries) is the proper fix if
+    # that collision turns out to matter in practice.
     edited_entries = (
         db.table("chronology_entries")
         .select("*")
@@ -52,11 +63,13 @@ def build_chronology(case_id: str) -> list[dict]:
         .execute()
         .data
     )
-    edited_locations = {(e["source_document_id"], e["source_location"]) for e in edited_entries}
+    edited_keys = {
+        (e["source_document_id"], e["source_location"], e["event_date"]) for e in edited_entries
+    }
     new_rows = [
         row
         for row in fresh_rows
-        if (row["source_document_id"], row["source_location"]) not in edited_locations
+        if (row["source_document_id"], row["source_location"], row["event_date"]) not in edited_keys
     ]
 
     inserted: list[dict] = []
