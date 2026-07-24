@@ -10,6 +10,8 @@ class Settings(BaseSettings):
     voyage_api_key: str = ""
     tesseract_cmd: str = ""
     deepgram_api_key: str = ""
+    # comma-separated allowed browser origins for CORS; default covers local dev
+    cors_origins: str = "http://localhost:3000"
 
 
 settings = Settings()

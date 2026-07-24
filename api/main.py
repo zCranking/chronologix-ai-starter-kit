@@ -2,9 +2,11 @@ import uuid
 from datetime import UTC, datetime
 
 from fastapi import BackgroundTasks, FastAPI, File, HTTPException, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from chronology.build import build_chronology
+from core.config import settings
 from core.db import get_client
 from demands.draft import draft_demand_letter
 from evidence.pipeline import process_evidence
@@ -12,6 +14,13 @@ from flags.detect import detect_flags
 from ingest.pipeline import process_document
 
 app = FastAPI(title="Chronologix API")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[o.strip() for o in settings.cors_origins.split(",") if o.strip()],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 DEV_FIRM_ID = "00000000-0000-0000-0000-000000000001"
 
