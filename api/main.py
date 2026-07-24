@@ -6,6 +6,7 @@ from pydantic import BaseModel
 
 from chronology.build import build_chronology
 from core.db import get_client
+from evidence.pipeline import process_evidence
 from flags.detect import detect_flags
 from ingest.pipeline import process_document
 
@@ -47,6 +48,28 @@ class DocumentResponse(BaseModel):
 class UpdateChronologyEntryRequest(BaseModel):
     summary: str | None = None
     event_date: str | None = None
+
+
+class EvidenceResponse(BaseModel):
+    id: str
+    case_id: str
+    status: str
+    original_filename: str
+    media_type: str
+    confirmed_by_attorney: bool
+
+
+_VIDEO_EXTENSIONS = {"mp4", "mov", "avi", "mkv", "webm"}
+_AUDIO_EXTENSIONS = {"mp3", "wav", "m4a", "ogg", "flac"}
+
+
+def _infer_media_type(filename: str) -> str:
+    ext = filename.lower().rsplit(".", 1)[-1]
+    if ext in _VIDEO_EXTENSIONS:
+        return "video"
+    if ext in _AUDIO_EXTENSIONS:
+        return "audio"
+    raise HTTPException(status_code=400, detail=f"unsupported evidence file type: {ext}")
 
 
 @app.post("/cases", response_model=CaseResponse)
@@ -184,3 +207,51 @@ def list_flags(case_id: str) -> list[dict]:
 @app.post("/cases/{case_id}/flags")
 def generate_flags(case_id: str) -> list[dict]:
     return detect_flags(case_id)
+
+
+@app.post("/cases/{case_id}/evidence", response_model=EvidenceResponse)
+async def upload_evidence(
+    case_id: str, background_tasks: BackgroundTasks, file: UploadFile = File(...)  # noqa: B008
+) -> dict:
+    media_type = _infer_media_type(file.filename)
+    db = get_client()
+    file_bytes = await file.read()
+    storage_path = f"{case_id}/{uuid.uuid4()}_{file.filename}"
+    db.storage.from_("evidence").upload(storage_path, file_bytes)
+    result = (
+        db.table("evidence")
+        .insert(
+            {
+                "case_id": case_id,
+                "storage_path": storage_path,
+                "original_filename": file.filename,
+                "media_type": media_type,
+                "status": "pending",
+            }
+        )
+        .execute()
+    )
+    evidence_row = result.data[0]
+    background_tasks.add_task(process_evidence, evidence_row["id"])
+    return evidence_row
+
+
+@app.get("/cases/{case_id}/evidence", response_model=list[EvidenceResponse])
+def list_evidence(case_id: str) -> list[dict]:
+    db = get_client()
+    return db.table("evidence").select("*").eq("case_id", case_id).execute().data
+
+
+@app.post("/cases/{case_id}/evidence/{evidence_id}/confirm", response_model=EvidenceResponse)
+def confirm_evidence(case_id: str, evidence_id: str) -> dict:
+    db = get_client()
+    result = (
+        db.table("evidence")
+        .update({"confirmed_by_attorney": True})
+        .eq("id", evidence_id)
+        .eq("case_id", case_id)
+        .execute()
+    )
+    if not result.data:
+        raise HTTPException(status_code=404, detail="evidence not found")
+    return result.data[0]
