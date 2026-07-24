@@ -349,6 +349,72 @@ def test_build_chronology_does_not_filter_a_different_event_on_the_same_page(mon
     assert result == [existing_edited_entry, *inserted_rows]
 
 
+def test_build_chronology_returns_combined_entries_sorted_by_event_date(monkeypatch):
+    """The edited entry here has a LATER date than the freshly-inserted one,
+    so a naive `edited_entries + inserted` concatenation would return them
+    out of chronological order -- CLAUDE.md defines Chronology as
+    specifically the date-ordered timeline, so this matters."""
+    documents_data = [{"id": "doc-1"}]
+    chunks_data = [
+        {
+            "id": "chunk-1",
+            "document_id": "doc-1",
+            "page_number": 1,
+            "content": "Early event on 2024-01-01.",
+        },
+        {
+            "id": "chunk-2",
+            "document_id": "doc-1",
+            "page_number": 2,
+            "content": "Later event on 2024-06-01.",
+        },
+    ]
+    later_edited_entry = {
+        "id": "entry-1",
+        "case_id": "case-1",
+        "event_date": "2024-06-01",
+        "summary": "MANUALLY CORRECTED: later event.",
+        "source_document_id": "doc-1",
+        "source_location": 2,
+        "version": 2,
+        "edited_by_attorney": True,
+    }
+    db = _fake_db(documents_data, chunks_data, edited_entries=[later_edited_entry])
+    monkeypatch.setattr(build, "get_client", lambda: db)
+    monkeypatch.setattr(
+        build,
+        "generate",
+        lambda prompt: json.dumps(
+            [
+                {
+                    "event_date": "2024-01-01",
+                    "summary": "Early event summary.",
+                    "source_document_id": "doc-1",
+                    "source_location": 1,
+                },
+                {
+                    "event_date": "2024-06-01",
+                    "summary": "Stale later event summary.",
+                    "source_document_id": "doc-1",
+                    "source_location": 2,
+                },
+            ]
+        ),
+    )
+    earlier_new_row = {
+        "case_id": "case-1",
+        "event_date": "2024-01-01",
+        "summary": "Early event summary.",
+        "source_document_id": "doc-1",
+        "source_location": 1,
+    }
+    db.__tables__["chronology_entries"].insert.return_value.execute.return_value.data = [earlier_new_row]
+
+    result = build.build_chronology("case-1")
+
+    assert [entry["event_date"] for entry in result] == ["2024-01-01", "2024-06-01"]
+
+
 def test_build_chronology_strips_markdown_fence_from_llm_response(monkeypatch):
     documents_data = [{"id": "doc-1"}]
     chunks_data = [

@@ -79,7 +79,7 @@ def build_chronology(case_id: str) -> list[dict]:
         ).execute()
         inserted = db.table("chronology_entries").insert(new_rows).execute().data
 
-    return edited_entries + inserted
+    return sorted(edited_entries + inserted, key=lambda e: e["event_date"])
 
 
 def _fetch_case_chunks(db, case_id: str) -> list[dict]:
