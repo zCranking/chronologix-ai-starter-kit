@@ -36,18 +36,30 @@ export default function Home() {
   }
 
   return (
-    <main className="flex flex-1 flex-col gap-8 max-w-3xl mx-auto w-full px-6 py-12">
-      <h1 className="text-2xl font-semibold text-zinc-900">Cases</h1>
+    <main className="flex flex-1 flex-col gap-10 max-w-3xl mx-auto w-full px-6 py-16">
+      <header className="flex flex-col gap-3">
+        <h1 className="font-[family-name:var(--font-display)] text-4xl font-semibold tracking-tight text-[color:var(--ink)]">
+          Chronologix
+        </h1>
+        <p className="text-[color:var(--muted)] text-base">
+          Turn a box of records into a verified, source-cited timeline.
+        </p>
+      </header>
 
       {error && (
-        <p role="alert" className="rounded border border-red-300 bg-red-50 px-4 py-2 text-red-800">
+        <p
+          role="alert"
+          className="rounded-[6px] border border-[color:var(--flag)]/40 bg-[color:var(--flag)]/5 px-4 py-2 text-[color:var(--flag)]"
+        >
           {error}
         </p>
       )}
 
       <section>
-        <h2 className="text-lg font-medium text-zinc-900 mb-2">New case</h2>
-        <form onSubmit={handleCreateCase} className="flex gap-2">
+        <h2 className="font-[family-name:var(--font-display)] text-lg font-semibold text-[color:var(--ink)] mb-3">
+          New case
+        </h2>
+        <form onSubmit={handleCreateCase} className="flex flex-col sm:flex-row gap-2">
           <label htmlFor="case-name" className="sr-only">
             Case name
           </label>
@@ -57,12 +69,12 @@ export default function Home() {
             value={newCaseName}
             onChange={(e) => setNewCaseName(e.target.value)}
             placeholder="Case name"
-            className="flex-1 rounded border border-zinc-300 px-3 py-2"
+            className="flex-1 rounded-[6px] border border-[color:var(--line)] bg-[color:var(--surface)] px-3 py-2 text-[color:var(--ink)] placeholder:text-[color:var(--muted)]"
           />
           <button
             type="submit"
             disabled={creating}
-            className="rounded bg-zinc-900 px-4 py-2 text-white disabled:bg-zinc-400 disabled:cursor-not-allowed"
+            className="rounded-[6px] bg-[color:var(--ink)] px-4 py-2 text-white disabled:bg-[color:var(--muted)] disabled:cursor-not-allowed"
           >
             {creating ? "Creating..." : "Create case"}
           </button>
@@ -70,17 +82,26 @@ export default function Home() {
       </section>
 
       <section>
-        <h2 className="text-lg font-medium text-zinc-900 mb-2">All cases</h2>
+        <h2 className="font-[family-name:var(--font-display)] text-lg font-semibold text-[color:var(--ink)] mb-3">
+          All cases
+        </h2>
         {loading ? (
-          <p className="text-zinc-600">Loading cases...</p>
+          <p className="text-[color:var(--muted)]">Loading cases...</p>
         ) : cases.length === 0 ? (
-          <p className="text-zinc-600">No cases yet.</p>
+          <p className="text-[color:var(--muted)]">
+            No cases yet — create one above to begin.
+          </p>
         ) : (
-          <ul className="flex flex-col gap-2">
+          <ul className="flex flex-col divide-y divide-[color:var(--line)] rounded-[6px] border border-[color:var(--line)] bg-[color:var(--surface)] overflow-hidden">
             {cases.map((c) => (
-              <li key={c.id} className="rounded border border-zinc-200 px-4 py-2">
-                <Link href={`/cases/${c.id}`} className="text-zinc-900 underline">
-                  {c.name}
+              <li key={c.id}>
+                <Link
+                  href={`/cases/${c.id}`}
+                  className="flex items-center px-4 py-3 hover:bg-[color:var(--paper)] transition-colors"
+                >
+                  <span className="font-[family-name:var(--font-display)] text-[color:var(--ink)]">
+                    {c.name}
+                  </span>
                 </Link>
               </li>
             ))}
