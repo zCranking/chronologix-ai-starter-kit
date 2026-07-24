@@ -82,6 +82,26 @@ Definition of done for this phase:
       for testing the pipeline mechanics, but not a substitute for a real
       recording with actual background noise, cross-talk, and accents)
 
+**Transcription accuracy roadmap** (partly done, rest deferred with reason):
+- DONE: Deepgram keyterm boosting (`core/transcription.py`'s
+  `DEFAULT_KEYTERMS` + a `keyterms` param) — boosts common legal terms
+  immediately, needs no training data. This is the right first lever.
+- DEFERRED, needs prerequisites: true Deepgram model fine-tuning on a
+  domain corpus. Blocked on two things that don't exist yet, and building
+  it now would be speculative: (1) a real labeled audio corpus — we're
+  pre-launch with zero real case recordings, and fine-tuning on synthetic
+  TTS would train the model on artifacts of the TTS voice, not real
+  depositions; (2) compliance groundwork — real recordings are PHI/
+  privileged, so a BAA with the transcription vendor and a defined
+  consent/retention policy must precede pointing any training pipeline at
+  real client audio (this is exactly the kind of vendor-data-flow decision
+  CLAUDE.md's compliance section says to flag before wiring up). The
+  practical path: once there's a modest volume of real, attorney-corrected
+  transcripts (the confirm/edit steps already capture the correction
+  signal), that corpus + a signed BAA is what unlocks fine-tuning — the
+  data collection is a natural byproduct of normal use, not a separate
+  effort.
+
 **Live-verified 2026-07-24** (same session as Phase 1, immediately after):
 real Deepgram transcription (Windows SAPI-generated synthetic speech, not
 just silence/noise), correct diarization/timestamps, real Voyage
