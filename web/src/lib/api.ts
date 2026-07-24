@@ -47,6 +47,14 @@ export type Flag = {
   resolved: boolean;
 };
 
+export type DemandLetter = {
+  id: string;
+  case_id: string;
+  body: string;
+  version: number;
+  edited_by_attorney: boolean;
+};
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${BASE_URL}${path}`, init);
   if (!response.ok) {
@@ -120,4 +128,16 @@ export const api = {
     request<Evidence>(`/cases/${caseId}/evidence/${evidenceId}/confirm`, {
       method: "POST",
     }),
+
+  listDemandLetters: (caseId: string) =>
+    request<DemandLetter[]>(`/cases/${caseId}/demand-letters`),
+
+  generateDemandLetter: (caseId: string) =>
+    request<DemandLetter>(`/cases/${caseId}/demand-letter`, { method: "POST" }),
+
+  updateDemandLetter: (caseId: string, letterId: string, body: string) =>
+    request<DemandLetter>(
+      `/cases/${caseId}/demand-letters/${letterId}`,
+      json("PATCH", { body })
+    ),
 };

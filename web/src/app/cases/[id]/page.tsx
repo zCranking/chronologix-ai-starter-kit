@@ -5,6 +5,7 @@ import {
   api,
   type CaseDetail,
   type ChronologyEntry,
+  type DemandLetter,
   type Document,
   type Evidence,
   type Flag,
@@ -22,6 +23,7 @@ export default function CaseDetailPage({
   const [chronology, setChronology] = useState<ChronologyEntry[]>([]);
   const [flags, setFlags] = useState<Flag[]>([]);
   const [evidence, setEvidence] = useState<Evidence[]>([]);
+  const [demandLetters, setDemandLetters] = useState<DemandLetter[]>([]);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -32,11 +34,16 @@ export default function CaseDetailPage({
   const [signingOff, setSigningOff] = useState(false);
   const [uploadingEvidence, setUploadingEvidence] = useState(false);
   const [confirmingEvidenceId, setConfirmingEvidenceId] = useState<string | null>(null);
+  const [generatingLetter, setGeneratingLetter] = useState(false);
 
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
   const [editSummary, setEditSummary] = useState("");
   const [editDate, setEditDate] = useState("");
   const [savingEdit, setSavingEdit] = useState(false);
+
+  const [editingLetter, setEditingLetter] = useState(false);
+  const [editLetterBody, setEditLetterBody] = useState("");
+  const [savingLetterEdit, setSavingLetterEdit] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -45,13 +52,15 @@ export default function CaseDetailPage({
       api.listChronology(caseId),
       api.listFlags(caseId),
       api.listEvidence(caseId),
+      api.listDemandLetters(caseId),
     ])
-      .then(([detail, docs, entries, flagList, evidenceList]) => {
+      .then(([detail, docs, entries, flagList, evidenceList, letters]) => {
         setCaseDetail(detail);
         setDocuments(docs);
         setChronology(entries);
         setFlags(flagList);
         setEvidence(evidenceList);
+        setDemandLetters(letters);
       })
       .catch((err: Error) => setError(err.message))
       .finally(() => setLoading(false));
@@ -171,6 +180,48 @@ export default function CaseDetailPage({
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setSavingEdit(false);
+    }
+  }
+
+  async function handleGenerateDemandLetter() {
+    setGeneratingLetter(true);
+    setError(null);
+    try {
+      await api.generateDemandLetter(caseId);
+      const letters = await api.listDemandLetters(caseId);
+      setDemandLetters(letters);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setGeneratingLetter(false);
+    }
+  }
+
+  function startEditLetter(letter: DemandLetter) {
+    setEditingLetter(true);
+    setEditLetterBody(letter.body);
+  }
+
+  function cancelEditLetter() {
+    setEditingLetter(false);
+  }
+
+  async function saveEditLetter(letter: DemandLetter) {
+    if (editLetterBody === letter.body) {
+      setEditingLetter(false);
+      return;
+    }
+    setSavingLetterEdit(true);
+    setError(null);
+    try {
+      await api.updateDemandLetter(caseId, letter.id, editLetterBody);
+      const letters = await api.listDemandLetters(caseId);
+      setDemandLetters(letters);
+      setEditingLetter(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSavingLetterEdit(false);
     }
   }
 
@@ -394,6 +445,86 @@ export default function CaseDetailPage({
               </li>
             ))}
           </ul>
+        )}
+      </section>
+
+      <section>
+        <div className="flex items-center justify-between mb-2">
+          <h2 className="text-lg font-medium text-zinc-900">Demand Letter</h2>
+          <button
+            type="button"
+            onClick={handleGenerateDemandLetter}
+            disabled={generatingLetter}
+            className="rounded bg-zinc-900 px-4 py-2 text-white disabled:bg-zinc-400 disabled:cursor-not-allowed"
+          >
+            {generatingLetter ? "Generating..." : "Generate demand letter draft"}
+          </button>
+        </div>
+        <p className="text-sm text-zinc-600 mb-2">
+          This is a starting draft, not a finished letter — review, complete
+          the bracketed placeholders, and edit before sending.
+        </p>
+        {demandLetters.length === 0 ? (
+          <p className="text-zinc-600">No demand letter drafted yet.</p>
+        ) : (
+          (() => {
+            const letter = demandLetters[0];
+            return (
+              <div className="rounded border border-zinc-200 px-4 py-3">
+                {editingLetter ? (
+                  <div className="flex flex-col gap-2">
+                    <label htmlFor="letter-body" className="text-sm text-zinc-700">
+                      Draft body
+                    </label>
+                    <textarea
+                      id="letter-body"
+                      value={editLetterBody}
+                      onChange={(e) => setEditLetterBody(e.target.value)}
+                      className="rounded border border-zinc-300 px-3 py-1 font-mono text-sm"
+                      rows={16}
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => saveEditLetter(letter)}
+                        disabled={savingLetterEdit}
+                        className="rounded bg-zinc-900 px-3 py-1 text-white disabled:bg-zinc-400 disabled:cursor-not-allowed"
+                      >
+                        {savingLetterEdit ? "Saving..." : "Save"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={cancelEditLetter}
+                        disabled={savingLetterEdit}
+                        className="rounded border border-zinc-300 px-3 py-1 disabled:opacity-50"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-zinc-500">Version {letter.version}</span>
+                      <button
+                        type="button"
+                        onClick={() => startEditLetter(letter)}
+                        className="text-sm underline text-zinc-700"
+                      >
+                        Edit
+                      </button>
+                    </div>
+                    <p className="whitespace-pre-wrap text-zinc-800 text-sm">{letter.body}</p>
+                    {letter.edited_by_attorney && (
+                      <span className="w-fit rounded bg-amber-100 px-2 py-0.5 text-xs text-amber-800">
+                        Edited by attorney
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })()
         )}
       </section>
 
