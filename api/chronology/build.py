@@ -4,13 +4,14 @@ from core.db import get_client
 from core.llm import generate, strip_json_fence
 from extraction.dates import extract_dates
 
-_PROMPT_TEMPLATE = """You are building a legal case chronology from source document excerpts below.
-Each excerpt is tagged with its source document id, page number (or "N/A" for non-paginated documents), and any date detected in it.
+_PROMPT_TEMPLATE = """You are building a legal case chronology from source excerpts below.
+Each excerpt is tagged with a source type ("document" or "evidence"), its source id, a location (a page number for documents, or a timestamp like "00:04:30" for evidence), and any date detected in it. Evidence excerpts may also show a speaker label.
 Produce a JSON array of chronology entries, each with:
 - "event_date": the date of the event in the excerpt, ISO format YYYY-MM-DD
 - "summary": a concise one or two sentence summary of what happened, based only on this excerpt
-- "source_document_id": the document id from the excerpt tag
-- "source_location": the page number from the excerpt tag (or "N/A")
+- "source_type": "document" or "evidence", copied from the excerpt tag
+- "source_id": the source id from the excerpt tag
+- "source_location": the location from the excerpt tag
 
 Only include facts explicitly stated in the excerpts. Do not infer, combine, or embellish. If an excerpt has no determinable date, omit it from the output. Return ONLY the JSON array, no other text.
 
@@ -21,23 +22,14 @@ EXCERPTS:
 
 def build_chronology(case_id: str) -> list[dict]:
     db = get_client()
-    chunks = _fetch_case_chunks(db, case_id)
-    if not chunks:
+    excerpts = _fetch_case_excerpts(db, case_id)
+    if not excerpts:
         return []
-    sorted_chunks = _attach_dates_and_sort(chunks)
-    prompt = _PROMPT_TEMPLATE.format(excerpts=_format_excerpts(sorted_chunks))
+    sorted_excerpts = _attach_dates_and_sort(excerpts)
+    prompt = _PROMPT_TEMPLATE.format(excerpts=_format_excerpts(sorted_excerpts))
     response = generate(prompt)
     entries = json.loads(strip_json_fence(response))
-    fresh_rows = [
-        {
-            "case_id": case_id,
-            "event_date": entry["event_date"],
-            "summary": entry["summary"],
-            "source_document_id": entry["source_document_id"],
-            "source_location": entry["source_location"],
-        }
-        for entry in entries
-    ]
+    fresh_rows = [_build_row(case_id, entry) for entry in entries]
 
     # An attorney's manual correction must never be silently overwritten by a
     # re-run (CLAUDE.md, docs/architecture.md) -- and just as importantly, a
@@ -45,16 +37,15 @@ def build_chronology(case_id: str) -> list[dict]:
     # excerpt either. Fetch already-edited entries first so both the
     # overwrite guard and the duplicate guard can key off them.
     #
-    # ponytail: chunking is page-granular, not event-granular, so a single
-    # page (one source_location) routinely yields multiple distinct events
-    # from one chunk -- (source_document_id, source_location) alone isn't a
-    # reliable "same excerpt" key (a live test caught this: editing one visit
+    # ponytail: chunking/utterance-splitting is page/segment-granular, not
+    # event-granular, so one source location routinely yields multiple
+    # distinct events -- (source id, location) alone isn't a reliable "same
+    # excerpt" key (a live test caught this for documents: editing one visit
     # on a page caused every other, unrelated visit on that same page to be
     # dropped on regeneration). Including event_date narrows this enough for
-    # Phase 1; it would still under-dedup two genuinely different events on
-    # the same page with the same date -- a real per-event identifier
-    # (e.g. a chunk/event id on chronology_entries) is the proper fix if
-    # that collision turns out to matter in practice.
+    # now; it would still under-dedup two genuinely different events at the
+    # same location on the same date -- a real per-event identifier is the
+    # proper fix if that collision turns out to matter in practice.
     edited_entries = (
         db.table("chronology_entries")
         .select("*")
@@ -63,14 +54,8 @@ def build_chronology(case_id: str) -> list[dict]:
         .execute()
         .data
     )
-    edited_keys = {
-        (e["source_document_id"], e["source_location"], e["event_date"]) for e in edited_entries
-    }
-    new_rows = [
-        row
-        for row in fresh_rows
-        if (row["source_document_id"], row["source_location"], row["event_date"]) not in edited_keys
-    ]
+    edited_keys = {_entry_key(e) for e in edited_entries}
+    new_rows = [row for row in fresh_rows if _entry_key(row) not in edited_keys]
 
     inserted: list[dict] = []
     if new_rows:
@@ -82,29 +67,96 @@ def build_chronology(case_id: str) -> list[dict]:
     return sorted(edited_entries + inserted, key=lambda e: e["event_date"])
 
 
-def _fetch_case_chunks(db, case_id: str) -> list[dict]:
+def _build_row(case_id: str, entry: dict) -> dict:
+    row = {
+        "case_id": case_id,
+        "event_date": entry["event_date"],
+        "summary": entry["summary"],
+        "source_location": entry["source_location"],
+    }
+    if entry["source_type"] == "evidence":
+        row["source_evidence_id"] = entry["source_id"]
+    else:
+        row["source_document_id"] = entry["source_id"]
+    return row
+
+
+def _entry_key(row: dict) -> tuple:
+    source_id = row.get("source_document_id") or row.get("source_evidence_id")
+    return (source_id, row["source_location"], row["event_date"])
+
+
+def _fetch_case_excerpts(db, case_id: str) -> list[dict]:
+    excerpts: list[dict] = []
+
     documents = db.table("documents").select("id").eq("case_id", case_id).execute().data
     document_ids = [d["id"] for d in documents]
-    if not document_ids:
-        return []
-    return db.table("chunks").select("*").in_("document_id", document_ids).execute().data
+    if document_ids:
+        chunks = db.table("chunks").select("*").in_("document_id", document_ids).execute().data
+        for chunk in chunks:
+            excerpts.append(
+                {
+                    "source_type": "document",
+                    "source_id": chunk["document_id"],
+                    "location": chunk["page_number"] if chunk["page_number"] is not None else "N/A",
+                    "speaker": None,
+                    "content": chunk["content"],
+                }
+            )
+
+    # Phase 2's heavier-review requirement (PLANNING.md): only transcripts
+    # an attorney has explicitly confirmed feed into chronology generation.
+    evidence = (
+        db.table("evidence")
+        .select("id")
+        .eq("case_id", case_id)
+        .eq("confirmed_by_attorney", True)
+        .execute()
+        .data
+    )
+    evidence_ids = [e["id"] for e in evidence]
+    if evidence_ids:
+        segments = (
+            db.table("evidence_segments").select("*").in_("evidence_id", evidence_ids).execute().data
+        )
+        for segment in segments:
+            excerpts.append(
+                {
+                    "source_type": "evidence",
+                    "source_id": segment["evidence_id"],
+                    "location": _format_timestamp(segment["start_time_seconds"]),
+                    "speaker": segment["speaker_label"],
+                    "content": segment["content"],
+                }
+            )
+
+    return excerpts
 
 
-def _attach_dates_and_sort(chunks: list[dict]) -> list[dict]:
-    for chunk in chunks:
-        detected = extract_dates(chunk["content"])
-        chunk["_detected_date"] = detected[0] if detected else None
-    dated = sorted((c for c in chunks if c["_detected_date"]), key=lambda c: c["_detected_date"])
-    undated = [c for c in chunks if not c["_detected_date"]]
+def _format_timestamp(seconds: float) -> str:
+    total_seconds = int(seconds)
+    hours, remainder = divmod(total_seconds, 3600)
+    minutes, secs = divmod(remainder, 60)
+    return f"{hours:02d}:{minutes:02d}:{secs:02d}"
+
+
+def _attach_dates_and_sort(excerpts: list[dict]) -> list[dict]:
+    for excerpt in excerpts:
+        detected = extract_dates(excerpt["content"])
+        excerpt["_detected_date"] = detected[0] if detected else None
+    dated = sorted((e for e in excerpts if e["_detected_date"]), key=lambda e: e["_detected_date"])
+    undated = [e for e in excerpts if not e["_detected_date"]]
     return dated + undated
 
 
-def _format_excerpts(chunks: list[dict]) -> str:
+def _format_excerpts(excerpts: list[dict]) -> str:
     lines = []
-    for chunk in chunks:
-        date_str = chunk["_detected_date"].isoformat() if chunk["_detected_date"] else "unknown"
-        page = chunk["page_number"] if chunk["page_number"] is not None else "N/A"
+    for excerpt in excerpts:
+        date_str = excerpt["_detected_date"].isoformat() if excerpt["_detected_date"] else "unknown"
+        speaker_tag = f" speaker={excerpt['speaker']}" if excerpt["speaker"] else ""
         lines.append(
-            f"[document_id={chunk['document_id']} page={page} detected_date={date_str}]\n{chunk['content']}\n"
+            f"[source_type={excerpt['source_type']} source_id={excerpt['source_id']} "
+            f"location={excerpt['location']}{speaker_tag} detected_date={date_str}]\n"
+            f"{excerpt['content']}\n"
         )
     return "\n".join(lines)
