@@ -151,6 +151,49 @@ def test_build_chronology_puts_undated_chunks_after_dated_chunks(monkeypatch):
     assert dated_2_idx < undated_idx
 
 
+def test_build_chronology_deletes_only_unedited_entries_before_inserting_fresh_ones(monkeypatch):
+    documents_data = [{"id": "doc-1"}]
+    chunks_data = [
+        {
+            "id": "chunk-1",
+            "document_id": "doc-1",
+            "page_number": 1,
+            "content": "Something happened on 2024-01-01.",
+        }
+    ]
+    db = _fake_db(documents_data, chunks_data)
+    monkeypatch.setattr(build, "get_client", lambda: db)
+    monkeypatch.setattr(
+        build,
+        "generate",
+        lambda prompt: json.dumps(
+            [
+                {
+                    "event_date": "2024-01-01",
+                    "summary": "Something happened.",
+                    "source_document_id": "doc-1",
+                    "source_location": 1,
+                }
+            ]
+        ),
+    )
+
+    build.build_chronology("case-1")
+
+    entries_table = db.__tables__["chronology_entries"]
+    entries_table.delete.assert_called_once()
+    entries_table.delete.return_value.eq.assert_any_call("case_id", "case-1")
+    entries_table.delete.return_value.eq.return_value.eq.assert_called_once_with(
+        "edited_by_attorney", False
+    )
+    entries_table.delete.return_value.eq.return_value.eq.return_value.execute.assert_called_once()
+    entries_table.insert.assert_called_once()
+    # delete must happen before insert, not after
+    delete_call_index = [c[0] for c in entries_table.method_calls].index("delete")
+    insert_call_index = [c[0] for c in entries_table.method_calls].index("insert")
+    assert delete_call_index < insert_call_index
+
+
 def test_build_chronology_raises_on_malformed_llm_json(monkeypatch):
     documents_data = [{"id": "doc-1"}]
     chunks_data = [

@@ -39,6 +39,12 @@ def build_chronology(case_id: str) -> list[dict]:
         for entry in entries
     ]
     if rows:
+        # An attorney's manual correction must never be silently overwritten
+        # by a re-run (CLAUDE.md, docs/architecture.md). Only unedited rows
+        # from a prior generation are cleared before inserting the fresh set.
+        db.table("chronology_entries").delete().eq("case_id", case_id).eq(
+            "edited_by_attorney", False
+        ).execute()
         db.table("chronology_entries").insert(rows).execute()
     return rows
 
