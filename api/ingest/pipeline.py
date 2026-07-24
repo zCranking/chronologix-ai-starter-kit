@@ -12,7 +12,18 @@ def process_document(document_id: str) -> None:
         pages = extract_text(file_bytes, doc_row["original_filename"])
         chunks = chunk_text(pages)
         texts = [content for _, content in chunks]
-        vectors = embed(texts) if texts else []
+        if texts:
+            try:
+                vectors = embed(texts)
+            except Exception:  # noqa: BLE001 -- embedding provider failures are unpredictable (network, auth, quota); any of them must degrade to a null embedding, not block ingest
+                # ponytail: chronology/build.py reads chunk text directly and
+                # doesn't do similarity search yet, so a missing/failed
+                # embedding call must not block ingest -- store the chunk with
+                # a null embedding instead. Backfill embeddings once semantic
+                # retrieval is actually built and needs them.
+                vectors = [None] * len(texts)
+        else:
+            vectors = []
         rows = [
             {
                 "document_id": document_id,
