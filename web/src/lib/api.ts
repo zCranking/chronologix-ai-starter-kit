@@ -23,10 +23,20 @@ export type ChronologyEntry = {
   case_id: string;
   event_date: string;
   summary: string;
-  source_document_id: string;
+  source_document_id: string | null;
+  source_evidence_id: string | null;
   source_location: string;
   version: number;
   edited_by_attorney: boolean;
+};
+
+export type Evidence = {
+  id: string;
+  case_id: string;
+  status: "pending" | "processing" | "transcribed" | "failed";
+  original_filename: string;
+  media_type: string;
+  confirmed_by_attorney: boolean;
 };
 
 export type Flag = {
@@ -94,4 +104,20 @@ export const api = {
 
   generateFlags: (caseId: string) =>
     request<Flag[]>(`/cases/${caseId}/flags`, { method: "POST" }),
+
+  listEvidence: (caseId: string) => request<Evidence[]>(`/cases/${caseId}/evidence`),
+
+  uploadEvidence: (caseId: string, file: File) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    return request<Evidence>(`/cases/${caseId}/evidence`, {
+      method: "POST",
+      body: formData,
+    });
+  },
+
+  confirmEvidence: (caseId: string, evidenceId: string) =>
+    request<Evidence>(`/cases/${caseId}/evidence/${evidenceId}/confirm`, {
+      method: "POST",
+    }),
 };

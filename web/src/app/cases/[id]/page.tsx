@@ -6,6 +6,7 @@ import {
   type CaseDetail,
   type ChronologyEntry,
   type Document,
+  type Evidence,
   type Flag,
 } from "@/lib/api";
 
@@ -20,6 +21,7 @@ export default function CaseDetailPage({
   const [documents, setDocuments] = useState<Document[]>([]);
   const [chronology, setChronology] = useState<ChronologyEntry[]>([]);
   const [flags, setFlags] = useState<Flag[]>([]);
+  const [evidence, setEvidence] = useState<Evidence[]>([]);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -28,6 +30,8 @@ export default function CaseDetailPage({
   const [generatingChronology, setGeneratingChronology] = useState(false);
   const [generatingFlags, setGeneratingFlags] = useState(false);
   const [signingOff, setSigningOff] = useState(false);
+  const [uploadingEvidence, setUploadingEvidence] = useState(false);
+  const [confirmingEvidenceId, setConfirmingEvidenceId] = useState<string | null>(null);
 
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
   const [editSummary, setEditSummary] = useState("");
@@ -40,12 +44,14 @@ export default function CaseDetailPage({
       api.listDocuments(caseId),
       api.listChronology(caseId),
       api.listFlags(caseId),
+      api.listEvidence(caseId),
     ])
-      .then(([detail, docs, entries, flagList]) => {
+      .then(([detail, docs, entries, flagList, evidenceList]) => {
         setCaseDetail(detail);
         setDocuments(docs);
         setChronology(entries);
         setFlags(flagList);
+        setEvidence(evidenceList);
       })
       .catch((err: Error) => setError(err.message))
       .finally(() => setLoading(false));
@@ -65,6 +71,36 @@ export default function CaseDetailPage({
     } finally {
       setUploading(false);
       e.target.value = "";
+    }
+  }
+
+  async function handleUploadEvidence(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingEvidence(true);
+    setError(null);
+    try {
+      await api.uploadEvidence(caseId, file);
+      const evidenceList = await api.listEvidence(caseId);
+      setEvidence(evidenceList);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setUploadingEvidence(false);
+      e.target.value = "";
+    }
+  }
+
+  async function handleConfirmEvidence(evidenceId: string) {
+    setConfirmingEvidenceId(evidenceId);
+    setError(null);
+    try {
+      const updated = await api.confirmEvidence(caseId, evidenceId);
+      setEvidence((prev) => prev.map((ev) => (ev.id === updated.id ? updated : ev)));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setConfirmingEvidenceId(null);
     }
   }
 
@@ -201,6 +237,52 @@ export default function CaseDetailPage({
       </section>
 
       <section>
+        <h2 className="text-lg font-medium text-zinc-900 mb-2">Evidence</h2>
+        <p className="text-sm text-zinc-600 mb-2">
+          Video and audio evidence must be confirmed by an attorney before it
+          appears in the generated chronology — unconfirmed transcripts are
+          ignored.
+        </p>
+        <label htmlFor="evidence-upload" className="block text-sm text-zinc-700 mb-1">
+          Upload video or audio
+        </label>
+        <input
+          id="evidence-upload"
+          type="file"
+          accept=".mp4,.mov,.avi,.mkv,.webm,.mp3,.wav,.m4a,.ogg,.flac"
+          onChange={handleUploadEvidence}
+          disabled={uploadingEvidence}
+          className="mb-3"
+        />
+        {uploadingEvidence && <p className="text-zinc-600 text-sm mb-2">Uploading...</p>}
+        {evidence.length === 0 ? (
+          <p className="text-zinc-600">No evidence uploaded yet.</p>
+        ) : (
+          <ul className="flex flex-col gap-1">
+            {evidence.map((ev) => (
+              <li key={ev.id} className="rounded border border-zinc-200 px-3 py-2 flex items-center justify-between gap-3">
+                <span>{ev.original_filename}</span>
+                <span className="text-zinc-600">{ev.media_type}</span>
+                <span className="text-zinc-600">{ev.status}</span>
+                <button
+                  type="button"
+                  onClick={() => handleConfirmEvidence(ev.id)}
+                  disabled={ev.confirmed_by_attorney || confirmingEvidenceId === ev.id}
+                  className="rounded bg-zinc-900 px-3 py-1 text-sm text-white disabled:bg-zinc-400 disabled:cursor-not-allowed"
+                >
+                  {ev.confirmed_by_attorney
+                    ? "Confirmed"
+                    : confirmingEvidenceId === ev.id
+                      ? "Confirming..."
+                      : "Confirm transcript"}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section>
         <div className="flex items-center justify-between mb-2">
           <h2 className="text-lg font-medium text-zinc-900">Chronology</h2>
           <button
@@ -273,7 +355,9 @@ export default function CaseDetailPage({
                     </div>
                     <p className="text-zinc-800">{entry.summary}</p>
                     <p className="text-sm text-zinc-500">
-                      doc {entry.source_document_id}, page {entry.source_location}
+                      {entry.source_document_id
+                        ? `doc ${entry.source_document_id}, page ${entry.source_location}`
+                        : `evidence ${entry.source_evidence_id}, at ${entry.source_location}`}
                     </p>
                     {entry.edited_by_attorney && (
                       <span className="w-fit rounded bg-amber-100 px-2 py-0.5 text-xs text-amber-800">
