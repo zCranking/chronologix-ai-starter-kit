@@ -130,12 +130,44 @@ a second `accuracy-verifier` run. Also regression-checked against Phase
 1's document case (same shared prompt) — no degradation, summaries are if
 anything more complete than before.
 
-## Future phases (not started — do not build ahead of this)
+## Current phase: Phase 3 — Move up the value chain
 
-**Phase 3 — Move up the value chain.** Auto-drafted demand letters and
-settlement packages generated from a finished chronology. Case value
-benchmarking against similar past cases, once enough case history exists
-to make that statistically meaningful.
+Goal: auto-drafted demand letters from a finished chronology, and (later)
+case-value benchmarking against similar past cases.
+
+Definition of done for this phase:
+- [x] Demand-letter drafting from a SIGNED-OFF chronology — `api/demands/`,
+      `demands/` is now a third LLM-calling module (governance updated in
+      CLAUDE.md). Guards: no draft unless the chronology is signed off,
+      the case exists, and there are entries — each guard trips before any
+      LLM call. The draft draws facts only from the chronology, states no
+      dollar amount, leaves `[ATTORNEY: ...]` placeholders (liability,
+      damages, demand amount, signature), and is headed "DRAFT — ATTORNEY
+      REVIEW REQUIRED". Drafts are versioned per-row; attorney edits (PATCH)
+      bump version + set edited_by_attorney and survive regeneration.
+- [x] Demand-letter API (generate/list/edit) + UI section — built, tested
+- [x] Live end-to-end verified 2026-07-24: real Claude draft from a
+      signed-off document chronology — every fact traced to the chronology
+      (all 3 medical visits, correctly cited), zero invented dollar
+      amounts, all attorney placeholders present, no fabricated
+      bar numbers/letterhead. The sign-off gate correctly returned 400
+      pre-signoff. Edit + regenerate versioning verified (attorney edit
+      preserved as a separate versioned row through regeneration).
+- [ ] Case-value benchmarking — **deferred, blocked on data, same as
+      transcription fine-tuning.** Benchmarking a case's value against
+      "similar past cases" is statistically meaningless with zero case
+      history (we're pre-launch). PLANNING.md's own phrasing gates this on
+      "once enough case history exists to make that statistically
+      meaningful." Building it now would be a speculative similarity model
+      over an empty corpus. Natural unlock: once real closed cases with
+      known outcomes accumulate, that becomes the benchmarking corpus —
+      and, like fine-tuning, it touches real client outcome data, so it
+      needs the same BAA/consent groundwork before a pipeline points at it.
+- [ ] `accuracy-verifier` was NOT separately spawned for the demand letter
+      — the Opus orchestrator verified it inline (a 3-entry chronology vs.
+      the drafted letter is unambiguous; spawning a second Opus agent for
+      it would be redundant cost). For a genuinely ambiguous or
+      higher-stakes draft, still run the dedicated verifier.
 
 **Phase 4 — Adjacent verticals and distribution.** Workers' comp and
 medical malpractice case types (same document shapes, different
@@ -153,6 +185,17 @@ Add a dated one-line entry each session with anything worth remembering:
 what shipped, what a reviewer caught, what got moved to CLAUDE.md.
 
 - YYYY-MM-DD: [example] Kicked off repo, added starter kit.
+- 2026-07-24 (continued): Phase 3 demand-letter drafting. Switched to an
+  explicit two-tier model split at the user's request — Opus as
+  orchestrator (design, decomposition, safety-critical judgment, review
+  adjudication, the inline accuracy check on the drafted letter), Haiku
+  for builders handed complete code (demands module, API endpoints),
+  Sonnet for the prose-described UI build and all code reviews. Built the
+  `demands/` module (third LLM-calling module, governance updated), schema,
+  API, and UI; live-verified a real Claude-drafted demand letter that drew
+  only on the chronology, stated no dollar figure, and carried all attorney
+  placeholders. Case-value benchmarking deferred with reason (no case
+  history corpus — same data blocker as transcription fine-tuning).
 - 2026-07-23: Environment setup (not a Phase 1 feature — none of the Definition
   of Done items above are started). Stack decided: FastAPI backend (`api/`),
   Next.js frontend (`web/`), Supabase Postgres/pgvector/Auth/Storage, Claude
