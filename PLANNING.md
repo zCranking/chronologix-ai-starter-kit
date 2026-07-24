@@ -20,12 +20,19 @@ Definition of done for this phase:
       `api/flags/detect.py`, same mocked-LLM caveat
 - [x] Every chronology entry traces to a source document and page/location —
       enforced in `chronology/build.py`'s prompt + insert, not fabricated
-- [ ] Attorney review/edit UI before a chronology is marked final
+- [x] Attorney review/edit UI before a chronology is marked final — `web/`
+      (case list, upload, generate, inline edit, sign-off), build/lint
+      clean, reviewed. Never exercised against a live backend (see below).
 - [ ] `accuracy-verifier` subagent run against a held-out test case with
       known ground truth, passing with zero hallucinated facts — **blocked
-      on a real `ANTHROPIC_API_KEY`**; everything above is built against a
-      mocked LLM and has never produced real output. Do not treat the
-      checked items above as "trustworthy chronology output achieved" —
+      on three missing credentials**: `SUPABASE_SERVICE_KEY` (needed just
+      to run `api/` at all — a live smoke test this session hit
+      `SupabaseException: supabase_key is required` on the very first
+      request), `ANTHROPIC_API_KEY`, and `VOYAGE_API_KEY`. Every backend
+      module above is unit-tested against mocks only and has NEVER run
+      end-to-end against real Supabase, real Claude, or real Voyage. Do
+      not treat the checked items above as "trustworthy chronology output
+      achieved" —
       only as "the code path exists and is unit-tested."
 
 ## Future phases (not started — do not build ahead of this)
