@@ -194,6 +194,43 @@ def test_build_chronology_deletes_only_unedited_entries_before_inserting_fresh_o
     assert delete_call_index < insert_call_index
 
 
+def test_build_chronology_strips_markdown_fence_from_llm_response(monkeypatch):
+    documents_data = [{"id": "doc-1"}]
+    chunks_data = [
+        {
+            "id": "chunk-1",
+            "document_id": "doc-1",
+            "page_number": 1,
+            "content": "Something happened on 2024-01-01.",
+        }
+    ]
+    db = _fake_db(documents_data, chunks_data)
+    monkeypatch.setattr(build, "get_client", lambda: db)
+    fenced_response = "```json\n" + json.dumps(
+        [
+            {
+                "event_date": "2024-01-01",
+                "summary": "Something happened.",
+                "source_document_id": "doc-1",
+                "source_location": 1,
+            }
+        ]
+    ) + "\n```"
+    monkeypatch.setattr(build, "generate", lambda prompt: fenced_response)
+
+    result = build.build_chronology("case-1")
+
+    assert result == [
+        {
+            "case_id": "case-1",
+            "event_date": "2024-01-01",
+            "summary": "Something happened.",
+            "source_document_id": "doc-1",
+            "source_location": 1,
+        }
+    ]
+
+
 def test_build_chronology_raises_on_malformed_llm_json(monkeypatch):
     documents_data = [{"id": "doc-1"}]
     chunks_data = [

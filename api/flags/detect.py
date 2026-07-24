@@ -1,7 +1,7 @@
 import json
 
 from core.db import get_client
-from core.llm import generate
+from core.llm import generate, strip_json_fence
 
 _PROMPT_TEMPLATE = """You are reviewing a legal case chronology for inconsistencies.
 Below are the chronology entries built from source documents. Identify only
@@ -28,7 +28,7 @@ def detect_flags(case_id: str) -> list[dict]:
         return []
     prompt = _PROMPT_TEMPLATE.format(entries=_format_entries(entries))
     response = generate(prompt)
-    flags = json.loads(response)
+    flags = json.loads(strip_json_fence(response))
     rows = [
         {
             "case_id": case_id,

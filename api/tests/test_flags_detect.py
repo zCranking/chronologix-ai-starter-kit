@@ -87,6 +87,24 @@ def test_detect_flags_returns_empty_list_when_llm_finds_no_inconsistencies(monke
     db.table.return_value.insert.assert_not_called()
 
 
+def test_detect_flags_strips_markdown_fence_from_llm_response(monkeypatch):
+    entries = [
+        {"id": "entry-1", "case_id": "case-1", "event_date": "2024-01-01", "summary": "Contract signed"},
+    ]
+    db = _fake_db(entries)
+    monkeypatch.setattr(detect, "get_client", lambda: db)
+    fenced_response = "```json\n" + json.dumps(
+        [{"description": "conflict", "related_entry_ids": ["entry-1"]}]
+    ) + "\n```"
+    monkeypatch.setattr(detect, "generate", lambda prompt: fenced_response)
+
+    result = detect.detect_flags("case-1")
+
+    assert result == [
+        {"case_id": "case-1", "description": "conflict", "related_entry_ids": ["entry-1"]}
+    ]
+
+
 def test_detect_flags_raises_on_malformed_llm_json(monkeypatch):
     entries = [
         {"id": "entry-1", "case_id": "case-1", "event_date": "2024-01-01", "summary": "Contract signed"},

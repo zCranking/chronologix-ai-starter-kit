@@ -1,6 +1,10 @@
+import re
+
 import anthropic
 
 from core.config import settings
+
+_FENCE_RE = re.compile(r"^```(?:json)?\s*\n(.*)\n```$", re.DOTALL)
 
 _client: anthropic.Anthropic | None = None
 
@@ -19,3 +23,12 @@ def generate(prompt: str, *, model: str = "claude-sonnet-4-5", max_tokens: int =
         messages=[{"role": "user", "content": prompt}],
     )
     return response.content[0].text
+
+
+def strip_json_fence(text: str) -> str:
+    """Claude (and other chat models) routinely wrap JSON output in a
+    markdown code fence even when told not to. Strip it so callers can
+    json.loads() the result directly; plain JSON passes through unchanged."""
+    text = text.strip()
+    match = _FENCE_RE.match(text)
+    return match.group(1) if match else text

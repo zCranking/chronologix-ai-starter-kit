@@ -1,7 +1,7 @@
 import json
 
 from core.db import get_client
-from core.llm import generate
+from core.llm import generate, strip_json_fence
 from extraction.dates import extract_dates
 
 _PROMPT_TEMPLATE = """You are building a legal case chronology from source document excerpts below.
@@ -27,7 +27,7 @@ def build_chronology(case_id: str) -> list[dict]:
     sorted_chunks = _attach_dates_and_sort(chunks)
     prompt = _PROMPT_TEMPLATE.format(excerpts=_format_excerpts(sorted_chunks))
     response = generate(prompt)
-    entries = json.loads(response)
+    entries = json.loads(strip_json_fence(response))
     rows = [
         {
             "case_id": case_id,

@@ -34,3 +34,19 @@ def test_generate_passes_through_model_and_max_tokens_overrides(monkeypatch):
         max_tokens=100,
         messages=[{"role": "user", "content": "prompt"}],
     )
+
+
+def test_strip_json_fence_passes_through_plain_json_unchanged():
+    assert llm.strip_json_fence('[{"a": 1}]') == '[{"a": 1}]'
+
+
+def test_strip_json_fence_strips_json_language_tagged_fence():
+    assert llm.strip_json_fence('```json\n[{"a": 1}]\n```') == '[{"a": 1}]'
+
+
+def test_strip_json_fence_strips_untagged_fence():
+    assert llm.strip_json_fence('```\n[{"a": 1}]\n```') == '[{"a": 1}]'
+
+
+def test_strip_json_fence_strips_surrounding_whitespace_around_fence():
+    assert llm.strip_json_fence('  \n```json\n[{"a": 1}]\n```\n  ') == '[{"a": 1}]'
