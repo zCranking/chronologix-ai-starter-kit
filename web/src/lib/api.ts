@@ -58,7 +58,19 @@ export type DemandLetter = {
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${BASE_URL}${path}`, init);
   if (!response.ok) {
-    throw new Error(`Request to ${path} failed with status ${response.status}`);
+    // Surface FastAPI's `detail` message (e.g. "sign off the chronology
+    // first") so the attorney sees why, not just a bare status code. Falls
+    // back to the status line if the body isn't the expected JSON shape.
+    let detail = "";
+    try {
+      const body = await response.json();
+      if (typeof body?.detail === "string") detail = body.detail;
+    } catch {
+      // non-JSON error body; fall through to the status-only message
+    }
+    throw new Error(
+      detail || `Request to ${path} failed with status ${response.status}`
+    );
   }
   return response.json() as Promise<T>;
 }
