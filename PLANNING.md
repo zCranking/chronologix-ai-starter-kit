@@ -73,8 +73,10 @@ Definition of done for this phase:
       unified excerpt shape in `chronology/build.py`, DB check constraint
       enforcing exactly one source per entry
 - [x] Evidence upload/confirm UI — `web/`, build/lint clean, reviewed
-- [ ] `accuracy-verifier` pass specifically on an evidence-sourced (not
+- [x] `accuracy-verifier` pass specifically on an evidence-sourced (not
       just document-sourced) chronology entry, against known ground truth
+      — **first pass FAILED for real** (dropped a material fact), fixed,
+      **second pass PASSED**. See below.
 - [ ] Real, non-synthetic video/audio test (everything verified so far
       used a synthetic TTS-generated WAV file and Windows SAPI — realistic
       for testing the pipeline mechanics, but not a substitute for a real
@@ -90,6 +92,23 @@ result pre-confirm, correct evidence-cited entry post-confirm with
 location). Review caught one real gap, fixed: `_build_row` silently
 routed any unrecognized `source_type` to the document column instead of
 rejecting it — now raises.
+
+**`accuracy-verifier` found a real bug, not a false alarm**: a deposition
+audio (11 short Deepgram utterance segments, one continuous witness
+answer) collapsed into one chronology entry that silently dropped the
+witness's negative observation ("did not see the driver exit the vehicle
+before police arrived"). Root cause: the shared prompt in
+`chronology/build.py` instructed "a concise one or two sentence summary,"
+which pushed Claude to compress and drop a fact rather than write a
+longer one. Exactly the failure mode CLAUDE.md calls out as worse than an
+obviously-incomplete result — a confident, complete-looking entry quietly
+missing something an opposing counsel would seize on. Fixed by rewriting
+the prompt to require every distinct material fact (including negative
+observations) be covered, favoring length over omission. Re-verified live
+(fact now present, nothing else regressed) and independently re-passed by
+a second `accuracy-verifier` run. Also regression-checked against Phase
+1's document case (same shared prompt) — no degradation, summaries are if
+anything more complete than before.
 
 ## Future phases (not started — do not build ahead of this)
 
