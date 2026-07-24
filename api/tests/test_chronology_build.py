@@ -481,6 +481,38 @@ def test_build_chronology_strips_markdown_fence_from_llm_response(monkeypatch):
     assert result == [expected_row]
 
 
+def test_build_chronology_raises_on_invalid_source_type(monkeypatch):
+    documents_data = [{"id": "doc-1"}]
+    chunks_data = [
+        {
+            "id": "chunk-1",
+            "document_id": "doc-1",
+            "page_number": 1,
+            "content": "Something happened on 2024-01-01.",
+        }
+    ]
+    db = _fake_db(documents_data=documents_data, chunks_data=chunks_data)
+    monkeypatch.setattr(build, "get_client", lambda: db)
+    monkeypatch.setattr(
+        build,
+        "generate",
+        lambda prompt: json.dumps(
+            [
+                {
+                    "event_date": "2024-01-01",
+                    "summary": "Something happened.",
+                    "source_type": "documnet",  # typo -- must not silently misroute to source_document_id
+                    "source_id": "doc-1",
+                    "source_location": 1,
+                }
+            ]
+        ),
+    )
+
+    with pytest.raises(ValueError, match="documnet"):
+        build.build_chronology("case-1")
+
+
 def test_build_chronology_raises_on_malformed_llm_json(monkeypatch):
     documents_data = [{"id": "doc-1"}]
     chunks_data = [

@@ -76,8 +76,10 @@ def _build_row(case_id: str, entry: dict) -> dict:
     }
     if entry["source_type"] == "evidence":
         row["source_evidence_id"] = entry["source_id"]
-    else:
+    elif entry["source_type"] == "document":
         row["source_document_id"] = entry["source_id"]
+    else:
+        raise ValueError(f"unrecognized source_type in LLM response: {entry['source_type']!r}")
     return row
 
 
