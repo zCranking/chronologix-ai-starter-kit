@@ -28,7 +28,7 @@ def build_chronology(case_id: str) -> list[dict]:
     prompt = _PROMPT_TEMPLATE.format(excerpts=_format_excerpts(sorted_chunks))
     response = generate(prompt)
     entries = json.loads(strip_json_fence(response))
-    rows = [
+    fresh_rows = [
         {
             "case_id": case_id,
             "event_date": entry["event_date"],
@@ -38,15 +38,35 @@ def build_chronology(case_id: str) -> list[dict]:
         }
         for entry in entries
     ]
-    if rows:
-        # An attorney's manual correction must never be silently overwritten
-        # by a re-run (CLAUDE.md, docs/architecture.md). Only unedited rows
-        # from a prior generation are cleared before inserting the fresh set.
+
+    # An attorney's manual correction must never be silently overwritten by a
+    # re-run (CLAUDE.md, docs/architecture.md) -- and just as importantly, a
+    # re-run must not create a second, stale-vs-corrected entry for the same
+    # excerpt either. Fetch already-edited entries first so both the
+    # overwrite guard and the duplicate guard can key off them.
+    edited_entries = (
+        db.table("chronology_entries")
+        .select("*")
+        .eq("case_id", case_id)
+        .eq("edited_by_attorney", True)
+        .execute()
+        .data
+    )
+    edited_locations = {(e["source_document_id"], e["source_location"]) for e in edited_entries}
+    new_rows = [
+        row
+        for row in fresh_rows
+        if (row["source_document_id"], row["source_location"]) not in edited_locations
+    ]
+
+    inserted: list[dict] = []
+    if new_rows:
         db.table("chronology_entries").delete().eq("case_id", case_id).eq(
             "edited_by_attorney", False
         ).execute()
-        db.table("chronology_entries").insert(rows).execute()
-    return rows
+        inserted = db.table("chronology_entries").insert(new_rows).execute().data
+
+    return edited_entries + inserted
 
 
 def _fetch_case_chunks(db, case_id: str) -> list[dict]:

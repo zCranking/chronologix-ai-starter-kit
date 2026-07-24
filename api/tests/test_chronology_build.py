@@ -6,7 +6,7 @@ import pytest
 from chronology import build
 
 
-def _fake_db(documents_data, chunks_data):
+def _fake_db(documents_data, chunks_data, edited_entries=None):
     """Build a fake supabase client whose .table(name) routes to a per-table mock
     so that documents/chunks/chronology_entries chains don't collide."""
     tables = {
@@ -16,6 +16,9 @@ def _fake_db(documents_data, chunks_data):
     }
     tables["documents"].select.return_value.eq.return_value.execute.return_value.data = documents_data
     tables["chunks"].select.return_value.in_.return_value.execute.return_value.data = chunks_data
+    tables["chronology_entries"].select.return_value.eq.return_value.eq.return_value.execute.return_value.data = (
+        edited_entries or []
+    )
 
     db = MagicMock()
     db.table.side_effect = lambda name: tables[name]
@@ -66,13 +69,6 @@ def test_build_chronology_happy_path_sorts_by_date_and_inserts_entries(monkeypat
 
     monkeypatch.setattr(build, "generate", fake_generate)
 
-    result = build.build_chronology("case-1")
-
-    prompt = captured_prompt["value"]
-    earlier_idx = prompt.index("Initial meeting occurred on 2024-01-01")
-    later_idx = prompt.index("Contract signed on 2024-01-15")
-    assert earlier_idx < later_idx
-
     expected_rows = [
         {
             "case_id": "case-1",
@@ -89,6 +85,15 @@ def test_build_chronology_happy_path_sorts_by_date_and_inserts_entries(monkeypat
             "source_location": 3,
         },
     ]
+    db.__tables__["chronology_entries"].insert.return_value.execute.return_value.data = expected_rows
+
+    result = build.build_chronology("case-1")
+
+    prompt = captured_prompt["value"]
+    earlier_idx = prompt.index("Initial meeting occurred on 2024-01-01")
+    later_idx = prompt.index("Contract signed on 2024-01-15")
+    assert earlier_idx < later_idx
+
     assert result == expected_rows
     db.__tables__["chronology_entries"].insert.assert_called_once_with(expected_rows)
     db.__tables__["chronology_entries"].insert.return_value.execute.assert_called_once()
@@ -194,6 +199,77 @@ def test_build_chronology_deletes_only_unedited_entries_before_inserting_fresh_o
     assert delete_call_index < insert_call_index
 
 
+def test_build_chronology_does_not_duplicate_entry_already_covered_by_an_edited_entry(monkeypatch):
+    """Regression test for a live bug: regenerating a case after an attorney
+    edit created a second, stale entry for the same source excerpt alongside
+    the correctly-preserved edited one, instead of skipping it."""
+    documents_data = [{"id": "doc-1"}]
+    chunks_data = [
+        {
+            "id": "chunk-1",
+            "document_id": "doc-1",
+            "page_number": 1,
+            "content": "ER visit on 2024-01-03 for back pain.",
+        },
+        {
+            "id": "chunk-2",
+            "document_id": "doc-1",
+            "page_number": 2,
+            "content": "Follow-up visit on 2024-01-20.",
+        },
+    ]
+    existing_edited_entry = {
+        "id": "entry-1",
+        "case_id": "case-1",
+        "event_date": "2024-01-03",
+        "summary": "MANUALLY CORRECTED: attorney-verified summary.",
+        "source_document_id": "doc-1",
+        "source_location": 1,
+        "version": 2,
+        "edited_by_attorney": True,
+    }
+    db = _fake_db(documents_data, chunks_data, edited_entries=[existing_edited_entry])
+    monkeypatch.setattr(build, "get_client", lambda: db)
+    monkeypatch.setattr(
+        build,
+        "generate",
+        lambda prompt: json.dumps(
+            [
+                {
+                    "event_date": "2024-01-03",
+                    "summary": "Stale AI-generated summary for the same visit.",
+                    "source_document_id": "doc-1",
+                    "source_location": 1,
+                },
+                {
+                    "event_date": "2024-01-20",
+                    "summary": "Follow-up visit summary.",
+                    "source_document_id": "doc-1",
+                    "source_location": 2,
+                },
+            ]
+        ),
+    )
+    new_row = {
+        "case_id": "case-1",
+        "event_date": "2024-01-20",
+        "summary": "Follow-up visit summary.",
+        "source_document_id": "doc-1",
+        "source_location": 2,
+    }
+    db.__tables__["chronology_entries"].insert.return_value.execute.return_value.data = [new_row]
+
+    result = build.build_chronology("case-1")
+
+    # only the non-overlapping fresh entry was inserted -- the duplicate for
+    # (doc-1, page 1), already covered by the edited entry, was filtered out
+    db.__tables__["chronology_entries"].insert.assert_called_once_with([new_row])
+    assert result == [existing_edited_entry, new_row]
+    assert not any(
+        e["summary"] == "Stale AI-generated summary for the same visit." for e in result
+    )
+
+
 def test_build_chronology_strips_markdown_fence_from_llm_response(monkeypatch):
     documents_data = [{"id": "doc-1"}]
     chunks_data = [
@@ -206,29 +282,34 @@ def test_build_chronology_strips_markdown_fence_from_llm_response(monkeypatch):
     ]
     db = _fake_db(documents_data, chunks_data)
     monkeypatch.setattr(build, "get_client", lambda: db)
-    fenced_response = "```json\n" + json.dumps(
-        [
-            {
-                "event_date": "2024-01-01",
-                "summary": "Something happened.",
-                "source_document_id": "doc-1",
-                "source_location": 1,
-            }
-        ]
-    ) + "\n```"
+    fenced_response = (
+        "```json\n"
+        + json.dumps(
+            [
+                {
+                    "event_date": "2024-01-01",
+                    "summary": "Something happened.",
+                    "source_document_id": "doc-1",
+                    "source_location": 1,
+                }
+            ]
+        )
+        + "\n```"
+    )
     monkeypatch.setattr(build, "generate", lambda prompt: fenced_response)
+
+    expected_row = {
+        "case_id": "case-1",
+        "event_date": "2024-01-01",
+        "summary": "Something happened.",
+        "source_document_id": "doc-1",
+        "source_location": 1,
+    }
+    db.__tables__["chronology_entries"].insert.return_value.execute.return_value.data = [expected_row]
 
     result = build.build_chronology("case-1")
 
-    assert result == [
-        {
-            "case_id": "case-1",
-            "event_date": "2024-01-01",
-            "summary": "Something happened.",
-            "source_document_id": "doc-1",
-            "source_location": 1,
-        }
-    ]
+    assert result == [expected_row]
 
 
 def test_build_chronology_raises_on_malformed_llm_json(monkeypatch):
