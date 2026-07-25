@@ -169,10 +169,53 @@ Definition of done for this phase:
       it would be redundant cost). For a genuinely ambiguous or
       higher-stakes draft, still run the dedicated verifier.
 
-**Phase 4 — Adjacent verticals and distribution.** Workers' comp and
-medical malpractice case types (same document shapes, different
-evaluation standard). Integration as an add-on inside case management
-platforms (e.g. Clio, Filevine, Litify) rather than only direct sales.
+## Current phase: Phase 4 — Adjacent verticals and distribution
+
+Goal: workers' comp and medical malpractice case types (same document
+shapes, different evaluation standard). Integration as an add-on inside
+case management platforms (e.g. Clio, Filevine, Litify) rather than only
+direct sales.
+
+Definition of done, split into what's actually buildable now vs. blocked:
+
+- [x] **Adjacent case types (buildable, no new credentials needed):**
+      `cases.case_type` (`personal_injury` | `workers_comp` |
+      `med_malpractice`), migration `00000000000007_case_types.sql`,
+      applied live. `POST /cases` validates and stores it.
+      `demands/draft.py` now has three prompt sections sharing one scaffold
+      (draft header, facts-only rule, no dollar amounts) but a distinct
+      evaluation-standard section per type: workers_comp is framed as a
+      no-fault benefits claim (average weekly wage, disability rating, MMI
+      — no liability/pain-and-suffering language), med_malpractice requires
+      a standard-of-care/breach/departure section instead of a generic
+      liability theory. Chronology/flags generation is unchanged — same
+      document shapes across all three types, per this phase's own framing.
+      `web/` gets a case-type selector on creation and a badge (3 new
+      accent colors extending the existing design-system tokens) on the
+      case list and case detail header.
+- [x] Live-verified 2026-07-25: seeded one demo case per type (see
+      `seed_demo.py`, all synthetic), generated real chronologies, flags,
+      and demand-letter drafts against live Claude/Voyage/Supabase.
+      `accuracy-verifier` ran specifically against the med_malpractice case
+      (the higher-stakes new path) — PASS, zero hallucinations, correct
+      standard-of-care framing, no dollar amounts, all placeholders present.
+      Also caught a real bug live (not case_type-specific, but surfaced by
+      this case's content): `core.llm.strip_json_fence()` required the
+      fenced block to span the entire response and broke when Claude
+      appended explanatory prose after the closing fence on the
+      med_malpractice flags call. Fixed (anchored `.match()` → unanchored
+      `.search()`), regression-tested, re-verified live.
+- [ ] **Case-management integrations (Clio/Filevine/Litify) — BLOCKED, not
+      started.** These need real partner API credentials/OAuth apps that
+      do not exist for this project (confirmed: no partner accounts, no
+      API keys, nothing in `api/.env`/`.env.example` for any of the three).
+      This was already flagged as a deferred item in
+      `docs/SESSION-HANDOFF.md` before this session. Do not build a mock or
+      placeholder integration against any of these platforms — an
+      unauthenticated stub isn't a real feature and would need to be
+      rebuilt against actual partner docs anyway. Unlocks when a partner
+      relationship/API access exists; flag to the account holder if this
+      becomes a priority.
 
 **Open question — DECIDED 2026-07-24:** whether to sell a defense-side or
 insurer-facing version. **Decision: no — plaintiff-side only.** Do not build
@@ -196,6 +239,28 @@ independently-pickable directions from the current state:
 Add a dated one-line entry each session with anything worth remembering:
 what shipped, what a reviewer caught, what got moved to CLAUDE.md.
 
+- 2026-07-25: Phase 4 (partial) — adjacent case types. Added `case_type`
+  (personal_injury/workers_comp/med_malpractice) to `cases`, migration
+  applied live via MCP (CLI wasn't linked/logged-in in this environment).
+  Case-type-aware demand-letter prompts in `demands/draft.py` (shared
+  scaffold, distinct evaluation-standard section per type). `web/` gets a
+  case-type selector + badge (3 new accent colors on the existing
+  CSS-custom-property design system). `seed_demo.py` now seeds one
+  synthetic case per type. Live-verified all three end to end against real
+  Claude/Voyage/Supabase; `accuracy-verifier` PASSED on the med_malpractice
+  letter (new/higher-stakes path). Live-testing caught a real bug in
+  shared infra: `core.llm.strip_json_fence()`'s anchored regex broke when
+  Claude appended prose after the closing JSON fence on the
+  med_malpractice flags call — fixed (`.match()` on an anchored pattern →
+  `.search()` on an unanchored one), regression-tested, re-verified live.
+  `code-reviewer` caught one real gap: `demands/draft.py` silently fell
+  back to the personal_injury prompt for any unrecognized case_type
+  instead of raising (this repo's own established convention per
+  `chronology/build.py`'s `_build_row`) — fixed to raise, test added.
+  **Clio/Filevine/Litify integration NOT built** — blocked on nonexistent
+  partner API credentials/partnerships, same blocker already on record in
+  `docs/SESSION-HANDOFF.md`; do not build a mock integration against any
+  of these. 97 tests green, `ruff`/`npm run lint`/`npm run build` clean.
 - YYYY-MM-DD: [example] Kicked off repo, added starter kit.
 - 2026-07-24 (session close): defense-side question DECIDED — plaintiff-side
   only, no defense lane. Demo-hardening pass: added CORS (a real

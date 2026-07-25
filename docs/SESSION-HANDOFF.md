@@ -5,7 +5,7 @@
 prior conversation. Keep it current: update the "Current state" and "Open
 directions" sections at the end of each working session.
 
-Last updated: 2026-07-24.
+Last updated: 2026-07-25.
 
 ---
 
@@ -38,6 +38,18 @@ severity — higher than a crash. See `README.md` for the pitch,
 - **Demo hardening: DONE.** CORS (a real demo-breaker), a provenance-themed
   UI redesign, `api/seed_demo.py` (a populated synthetic "Rivera v. Deng"
   demo case), and a real run guide in `README.md`.
+- **Phase 4 (partial) — adjacent case types: COMPLETE, live-verified.**
+  `cases.case_type` (personal_injury / workers_comp / med_malpractice);
+  case-type-aware demand-letter prompts (workers_comp = no-fault benefits
+  framing, med_malpractice = standard-of-care framing); case-type selector
+  + badge in `web/`. `seed_demo.py` now seeds one synthetic case per type.
+  `accuracy-verifier` PASSED on the med_malpractice case (the new,
+  higher-stakes path). Live-testing this also caught and fixed a real bug
+  in shared infra: `core.llm.strip_json_fence()` broke when Claude
+  appended prose after the closing JSON fence — see PLANNING.md for detail.
+  **Case-management integrations (Clio/Filevine/Litify) are NOT built** —
+  blocked on nonexistent partner API credentials, same as before this
+  session. See PLANNING.md's Phase 4 section.
 
 **Verification bar in use:** unit tests (currently ~90, all green) are the
 floor, not the proof. Every LLM-touching feature is additionally

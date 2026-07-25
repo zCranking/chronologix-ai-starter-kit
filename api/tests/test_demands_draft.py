@@ -20,8 +20,13 @@ def _fake_db(case=None, entries=None, existing_versions=None):
     return db
 
 
-def _signed_off_case():
-    return {"id": "case-1", "name": "Smith v. Jones", "chronology_signed_off": True}
+def _signed_off_case(case_type="personal_injury"):
+    return {
+        "id": "case-1",
+        "name": "Smith v. Jones",
+        "chronology_signed_off": True,
+        "case_type": case_type,
+    }
 
 
 def _entries():
@@ -88,6 +93,57 @@ def test_draft_demand_letter_prompts_with_events_and_inserts_version_1(monkeypat
         {"case_id": "case-1", "body": "DRAFT -- ATTORNEY REVIEW REQUIRED -- NOT FOR SERVICE\n\nDear Counsel...", "version": 1}
     )
     assert result == inserted
+
+
+def test_draft_demand_letter_uses_workers_comp_prompt_for_workers_comp_case(monkeypatch):
+    db = _fake_db(case=_signed_off_case(case_type="workers_comp"), entries=_entries(), existing_versions=[])
+    captured = {}
+
+    def fake_generate(prompt):
+        captured["prompt"] = prompt
+        return "DRAFT -- ATTORNEY REVIEW REQUIRED -- NOT FOR SERVICE"
+
+    monkeypatch.setattr(draft, "get_client", lambda: db)
+    monkeypatch.setattr(draft, "generate", fake_generate)
+    db.__tables__["demand_letters"].insert.return_value.execute.return_value.data = [
+        {"id": "dl-1", "case_id": "case-1", "body": "x", "version": 1, "edited_by_attorney": False}
+    ]
+
+    draft.draft_demand_letter("case-1")
+
+    assert "WORKERS' COMPENSATION BENEFITS CLAIM DRAFT" in captured["prompt"]
+    assert "disability rating" in captured["prompt"]
+    assert "pain and suffering" not in captured["prompt"]
+
+
+def test_draft_demand_letter_uses_med_malpractice_prompt_for_med_malpractice_case(monkeypatch):
+    db = _fake_db(case=_signed_off_case(case_type="med_malpractice"), entries=_entries(), existing_versions=[])
+    captured = {}
+
+    def fake_generate(prompt):
+        captured["prompt"] = prompt
+        return "DRAFT -- ATTORNEY REVIEW REQUIRED -- NOT FOR SERVICE"
+
+    monkeypatch.setattr(draft, "get_client", lambda: db)
+    monkeypatch.setattr(draft, "generate", fake_generate)
+    db.__tables__["demand_letters"].insert.return_value.execute.return_value.data = [
+        {"id": "dl-1", "case_id": "case-1", "body": "x", "version": 1, "edited_by_attorney": False}
+    ]
+
+    draft.draft_demand_letter("case-1")
+
+    assert "MEDICAL MALPRACTICE DEMAND LETTER DRAFT" in captured["prompt"]
+    assert "standard of care" in captured["prompt"]
+
+
+def test_draft_demand_letter_raises_on_unrecognized_case_type(monkeypatch):
+    db = _fake_db(case=_signed_off_case(case_type="bogus"), entries=_entries(), existing_versions=[])
+    gen = MagicMock()
+    monkeypatch.setattr(draft, "get_client", lambda: db)
+    monkeypatch.setattr(draft, "generate", gen)
+    with pytest.raises(ValueError, match="unrecognized case_type"):
+        draft.draft_demand_letter("case-1")
+    gen.assert_not_called()  # no wasted LLM call, and no wrongly-framed letter drafted
 
 
 def test_draft_demand_letter_increments_version_when_prior_draft_exists(monkeypatch):

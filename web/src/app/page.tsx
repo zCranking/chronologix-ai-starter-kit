@@ -2,13 +2,15 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { api, type Case } from "@/lib/api";
+import { api, CASE_TYPE_LABELS, type Case, type CaseType } from "@/lib/api";
+import { CaseTypeBadge } from "@/components/CaseTypeBadge";
 
 export default function Home() {
   const [cases, setCases] = useState<Case[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [newCaseName, setNewCaseName] = useState("");
+  const [newCaseType, setNewCaseType] = useState<CaseType>("personal_injury");
   const [creating, setCreating] = useState(false);
 
   useEffect(() => {
@@ -25,7 +27,7 @@ export default function Home() {
     setCreating(true);
     setError(null);
     try {
-      const created = await api.createCase(newCaseName.trim());
+      const created = await api.createCase(newCaseName.trim(), newCaseType);
       setCases((prev) => [...prev, created]);
       setNewCaseName("");
     } catch (err) {
@@ -71,6 +73,21 @@ export default function Home() {
             placeholder="Case name"
             className="flex-1 rounded-[6px] border border-[color:var(--line)] bg-[color:var(--surface)] px-3 py-2 text-[color:var(--ink)] placeholder:text-[color:var(--muted)]"
           />
+          <label htmlFor="case-type" className="sr-only">
+            Case type
+          </label>
+          <select
+            id="case-type"
+            value={newCaseType}
+            onChange={(e) => setNewCaseType(e.target.value as CaseType)}
+            className="rounded-[6px] border border-[color:var(--line)] bg-[color:var(--surface)] px-3 py-2 text-[color:var(--ink)]"
+          >
+            {Object.entries(CASE_TYPE_LABELS).map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
           <button
             type="submit"
             disabled={creating}
@@ -97,11 +114,12 @@ export default function Home() {
               <li key={c.id}>
                 <Link
                   href={`/cases/${c.id}`}
-                  className="flex items-center px-4 py-3 hover:bg-[color:var(--paper)] transition-colors"
+                  className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-[color:var(--paper)] transition-colors"
                 >
                   <span className="font-[family-name:var(--font-display)] text-[color:var(--ink)]">
                     {c.name}
                   </span>
+                  <CaseTypeBadge caseType={c.case_type} />
                 </Link>
               </li>
             ))}

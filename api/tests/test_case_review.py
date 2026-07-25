@@ -10,14 +10,16 @@ client = TestClient(main.app)
 def test_list_cases_returns_all_cases(monkeypatch):
     db = MagicMock()
     db.table.return_value.select.return_value.execute.return_value.data = [
-        {"id": "case-1", "name": "Smith v. Jones", "firm_id": main.DEV_FIRM_ID}
+        {"id": "case-1", "name": "Smith v. Jones", "firm_id": main.DEV_FIRM_ID, "case_type": "personal_injury"}
     ]
     monkeypatch.setattr(main, "get_client", lambda: db)
 
     response = client.get("/cases")
 
     assert response.status_code == 200
-    assert response.json() == [{"id": "case-1", "name": "Smith v. Jones", "firm_id": main.DEV_FIRM_ID}]
+    assert response.json() == [
+        {"id": "case-1", "name": "Smith v. Jones", "firm_id": main.DEV_FIRM_ID, "case_type": "personal_injury"}
+    ]
 
 
 def test_get_case_returns_case_detail(monkeypatch):
@@ -26,6 +28,7 @@ def test_get_case_returns_case_detail(monkeypatch):
         "id": "case-1",
         "name": "Smith v. Jones",
         "firm_id": main.DEV_FIRM_ID,
+        "case_type": "personal_injury",
         "chronology_signed_off": False,
         "chronology_signed_off_at": None,
     }
@@ -136,6 +139,7 @@ def test_sign_off_case_sets_signed_off_true(monkeypatch):
             "id": "case-1",
             "name": "Smith v. Jones",
             "firm_id": main.DEV_FIRM_ID,
+            "case_type": "personal_injury",
             "chronology_signed_off": True,
             "chronology_signed_off_at": "2026-07-23T00:00:00+00:00",
         }

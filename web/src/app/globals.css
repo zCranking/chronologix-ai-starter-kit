@@ -10,6 +10,9 @@
   --evidence: #0f766e;
   --verified: #a16207;
   --flag: #b91c1c;
+  --case-personal-injury: #52606d;
+  --case-workers-comp: #b7791f;
+  --case-med-malpractice: #7c3aed;
 }
 
 @theme inline {
@@ -22,6 +25,9 @@
   --color-evidence: var(--evidence);
   --color-verified: var(--verified);
   --color-flag: var(--flag);
+  --color-case-personal-injury: var(--case-personal-injury);
+  --color-case-workers-comp: var(--case-workers-comp);
+  --color-case-med-malpractice: var(--case-med-malpractice);
   --font-display: var(--font-spectral);
   --font-sans: var(--font-inter);
   --font-mono: var(--font-mono);

@@ -30,20 +30,26 @@ def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
+_CASE_TYPES = {"personal_injury", "workers_comp", "med_malpractice"}
+
+
 class CreateCaseRequest(BaseModel):
     name: str
+    case_type: str = "personal_injury"
 
 
 class CaseResponse(BaseModel):
     id: str
     name: str
     firm_id: str
+    case_type: str
 
 
 class CaseDetailResponse(BaseModel):
     id: str
     name: str
     firm_id: str
+    case_type: str
     chronology_signed_off: bool
     chronology_signed_off_at: str | None
 
@@ -96,8 +102,14 @@ def _infer_media_type(filename: str) -> str:
 
 @app.post("/cases", response_model=CaseResponse)
 def create_case(payload: CreateCaseRequest) -> dict:
+    if payload.case_type not in _CASE_TYPES:
+        raise HTTPException(status_code=400, detail=f"unsupported case_type: {payload.case_type}")
     db = get_client()
-    result = db.table("cases").insert({"name": payload.name, "firm_id": DEV_FIRM_ID}).execute()
+    result = (
+        db.table("cases")
+        .insert({"name": payload.name, "firm_id": DEV_FIRM_ID, "case_type": payload.case_type})
+        .execute()
+    )
     return result.data[0]
 
 

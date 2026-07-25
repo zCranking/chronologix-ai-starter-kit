@@ -1,9 +1,18 @@
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
+export type CaseType = "personal_injury" | "workers_comp" | "med_malpractice";
+
+export const CASE_TYPE_LABELS: Record<CaseType, string> = {
+  personal_injury: "Personal Injury",
+  workers_comp: "Workers' Comp",
+  med_malpractice: "Medical Malpractice",
+};
+
 export type Case = {
   id: string;
   name: string;
   firm_id: string;
+  case_type: CaseType;
 };
 
 export type CaseDetail = Case & {
@@ -86,7 +95,8 @@ function json(method: string, body: unknown): RequestInit {
 export const api = {
   listCases: () => request<Case[]>("/cases"),
 
-  createCase: (name: string) => request<Case>("/cases", json("POST", { name })),
+  createCase: (name: string, caseType: CaseType) =>
+    request<Case>("/cases", json("POST", { name, case_type: caseType })),
 
   getCase: (caseId: string) => request<CaseDetail>(`/cases/${caseId}`),
 

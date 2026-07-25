@@ -10,6 +10,7 @@ import {
   type Evidence,
   type Flag,
 } from "@/lib/api";
+import { CaseTypeBadge } from "@/components/CaseTypeBadge";
 
 export default function CaseDetailPage({
   params,
@@ -248,10 +249,13 @@ export default function CaseDetailPage({
 
   return (
     <main className="flex flex-1 flex-col gap-10 max-w-3xl mx-auto w-full px-6 py-12">
-      <header className="flex flex-col gap-1">
-        <h1 className="font-[family-name:var(--font-display)] text-3xl font-semibold tracking-tight text-[color:var(--ink)]">
-          {caseDetail.name}
-        </h1>
+      <header className="flex flex-col gap-2">
+        <div className="flex items-center gap-3 flex-wrap">
+          <h1 className="font-[family-name:var(--font-display)] text-3xl font-semibold tracking-tight text-[color:var(--ink)]">
+            {caseDetail.name}
+          </h1>
+          <CaseTypeBadge caseType={caseDetail.case_type} />
+        </div>
         <p
           className={
             caseDetail.chronology_signed_off

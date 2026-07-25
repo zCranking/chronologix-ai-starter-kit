@@ -10,7 +10,7 @@ client = TestClient(main.app)
 def test_create_case_returns_case_with_dev_firm_id(monkeypatch):
     db = MagicMock()
     db.table.return_value.insert.return_value.execute.return_value.data = [
-        {"id": "case-1", "name": "Smith v. Jones", "firm_id": main.DEV_FIRM_ID}
+        {"id": "case-1", "name": "Smith v. Jones", "firm_id": main.DEV_FIRM_ID, "case_type": "personal_injury"}
     ]
     monkeypatch.setattr(main, "get_client", lambda: db)
 
@@ -18,6 +18,42 @@ def test_create_case_returns_case_with_dev_firm_id(monkeypatch):
 
     assert response.status_code == 200
     assert response.json()["firm_id"] == "00000000-0000-0000-0000-000000000001"
+    assert response.json()["case_type"] == "personal_injury"
+
+
+def test_create_case_defaults_to_personal_injury_when_case_type_omitted(monkeypatch):
+    db = MagicMock()
+    db.table.return_value.insert.return_value.execute.return_value.data = [
+        {"id": "case-1", "name": "Smith v. Jones", "firm_id": main.DEV_FIRM_ID, "case_type": "personal_injury"}
+    ]
+    monkeypatch.setattr(main, "get_client", lambda: db)
+
+    client.post("/cases", json={"name": "Smith v. Jones"})
+
+    args, _ = db.table.return_value.insert.call_args
+    assert args[0]["case_type"] == "personal_injury"
+
+
+def test_create_case_accepts_workers_comp_case_type(monkeypatch):
+    db = MagicMock()
+    db.table.return_value.insert.return_value.execute.return_value.data = [
+        {"id": "case-1", "name": "Doe Claim", "firm_id": main.DEV_FIRM_ID, "case_type": "workers_comp"}
+    ]
+    monkeypatch.setattr(main, "get_client", lambda: db)
+
+    response = client.post("/cases", json={"name": "Doe Claim", "case_type": "workers_comp"})
+
+    assert response.status_code == 200
+    assert response.json()["case_type"] == "workers_comp"
+
+
+def test_create_case_rejects_unsupported_case_type(monkeypatch):
+    db = MagicMock()
+    monkeypatch.setattr(main, "get_client", lambda: db)
+
+    response = client.post("/cases", json={"name": "Doe Claim", "case_type": "bogus"})
+
+    assert response.status_code == 400
 
 
 def test_upload_document_creates_pending_document_and_schedules_processing(monkeypatch):

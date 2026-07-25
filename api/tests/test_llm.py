@@ -50,3 +50,10 @@ def test_strip_json_fence_strips_untagged_fence():
 
 def test_strip_json_fence_strips_surrounding_whitespace_around_fence():
     assert llm.strip_json_fence('  \n```json\n[{"a": 1}]\n```\n  ') == '[{"a": 1}]'
+
+
+def test_strip_json_fence_strips_fence_with_trailing_explanatory_prose():
+    # real failure mode: Claude sometimes appends commentary after the
+    # closing fence instead of stopping there.
+    text = '```json\n[]\n```\n\nThere are no inconsistencies in these entries.'
+    assert llm.strip_json_fence(text) == "[]"
