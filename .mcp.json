@@ -1,17 +1,14 @@
 {
   "mcpServers": {
     "_comment": "Template only — none of these are wired up yet. Add servers as the stack is decided, and remove this comment key (JSON doesn't support real comments; delete before first real use).",
-
     "_example_postgres": {
       "type": "stdio",
       "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-postgres", "postgresql://localhost/chronologix"]
-    },
-
-    "_example_github": {
-      "type": "stdio",
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-github"]
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-postgres",
+        "postgresql://localhost/chronologix"
+      ]
     }
   }
 }

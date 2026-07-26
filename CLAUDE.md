@@ -139,3 +139,6 @@ to the LLM or Supabase directly.
   that wrote the code.
 - Don't silently "fix" a flagged inconsistency in source data. Flags are
   surfaced to attorneys, not resolved by the system.
+<!-- codeburn:begin read-edit-ratio -->
+Before editing any file, read it first. Before modifying a function, grep for all callers. Research before you edit.
+<!-- codeburn:end read-edit-ratio -->
